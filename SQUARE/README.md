@@ -40,6 +40,7 @@ Reports include:
 
 - **`qec_distance_resolution`** — how code distance `d` was chosen: CLI `--d`, explicit `qec_code_distance` / `qec.code_distance`, or `qec.distance_policy: heuristic_union_bound` (phenomenological union bound over logical qubits × depth proxy; **not** the Gidney & Ekerå optimizer).
 - **`layout_estimate`** — naive data-plane qubit product; **derived non-data overhead** = Table 2 pinned total minus data plane when both exist; optional `physical_qubits_per_ccz_factory_approximate` in magic YAML for an explicit factory footprint.
+- **`layout_optimization`** — scans odd code distances: union-bound mass vs budget and patch formula → data-plane qubits (optional `qec.emit_optimization_trace: true` for the full table). Distance selection uses the same discrete scan by default (`qec.distance_optimizer: discrete_scan`).
 - **`timing`** — Table 2 pins, naive depth×cycle, **`schedule_model_v1`** (depth × effective layer time ÷ CCZ count, reaction-aware when inferred), and **calibration ratios** vs pinned wall-clock (see `docs/output-contract.md` non-goals).
 
 After install, load a scenario and print a report:

@@ -68,7 +68,7 @@ scenario_file:
     magic: { description: Path or document_id under Assumptions/MagicStateProduction/. }
     algorithm: { description: Path or id under Algorithms/. }
     qec_code_distance: { description: Optional positive integer; surface-code distance d for evaluating logical_qubit_patch_physical_qubit_count_formula in reports. }
-    qec: { description: Optional nested map; may include code_distance (same role as qec_code_distance), distance_policy (e.g. heuristic_union_bound), logical_error_budget. }
+    qec: { description: Optional nested map; may include code_distance, distance_policy (e.g. heuristic_union_bound), logical_error_budget, distance_optimizer (discrete_scan or closed_form), emit_optimization_trace, emit_layout_optimization (default on). }
     schedule: { description: Optional nested map; e.g. reaction_limited bool to steer simple schedule heuristics in reports. }
 
 # Example entry shape (comment only — use in real files under Modalities/, QEC_Codes/, etc.):

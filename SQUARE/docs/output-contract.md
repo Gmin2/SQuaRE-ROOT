@@ -31,6 +31,7 @@ Every report is a JSON-serializable object with at least:
 | `timing` | `object` | Table 2 pins, naive depth×cycle, optional schedule heuristic + calibration; see below. |
 | `qec_distance_resolution` | `object` | How `d` was chosen (`cli_override`, `explicit_scenario`, `heuristic_union_bound`, etc.). |
 | `layout_estimate` | `object` | Data-plane proxy, pinned end-to-end qubits, derived non-data overhead, optional YAML factory footprint; see below. |
+| `layout_optimization` | `object \| null` | Per-distance scan: union-bound mass and patch/data-plane proxies; see below. |
 
 ## Scenario inputs for `d`
 
@@ -44,6 +45,10 @@ Reports fill QEC patch metrics when **code distance** is resolved:
 | `qec.distance_policy` | If set to `heuristic_union_bound` (aliases: `optimize_heuristic`, `heuristic`) and explicit `d` is absent, use phenomenological heuristic (see `qec_distance_resolution`). |
 
 Optional scenario keys for the heuristic: `qec.logical_error_budget` (default `0.1`). Tunables live on the QEC profile (`heuristic_*` parameters in YAML).
+
+- `qec.distance_optimizer`: `discrete_scan` (default) runs a **discrete odd-`d` scan** for the smallest distance meeting the union bound; `closed_form` uses the legacy closed-form inversion + clamping.
+- `qec.emit_optimization_trace`: if true, `layout_optimization.candidates` lists every scanned `d` (union-bound mass, data-plane proxy, optional residual vs reported total).
+- `qec.emit_layout_optimization`: if false, omits the entire `layout_optimization` block.
 
 Optional schedule steering: `schedule.reaction_limited` (`boolean`); otherwise inferred from `table2_reference_row` / factory key text (`distillation` → not reaction-limited for the simple model).
 
@@ -103,8 +108,9 @@ Headline fields (all optional / nullable):
 |-----|------|-------------|
 | `mode` | `string` | `cli_override` \| `explicit_scenario` \| `heuristic_union_bound` \| `unset` \| failure modes (`heuristic_failed_*`). |
 | `distance_d` | `number \| null` | Resolved `d` when available. |
-| `heuristic` | `object` | Present for `heuristic_union_bound`; echoes inputs and phenomenological metadata. |
+| `heuristic` | `object` | Present for `heuristic_union_bound`; includes `scan_rows` when using discrete scan, plus `closed_form_distance_d` for comparison. |
 | `logical_error_budget` | `number` | Budget passed into the heuristic when applicable. |
+| `distance_optimizer` | `string` | `discrete_scan` or `closed_form` (which engine selected `d`). |
 
 ## `layout_estimate`
 
@@ -116,6 +122,15 @@ Headline fields (all optional / nullable):
 | `factory_footprint_physical_qubits_from_yaml` | Optional explicit factory footprint from magic YAML. |
 | `physical_qubits_per_ccz_factory_approximate_key` | Name of the magic YAML key when used. |
 | `provenance` | `layout_proxy_v1`. |
+
+## `layout_optimization`
+
+Present when patch formula, logical qubits, measurement depth, and physical gate error are available (unless `qec.emit_layout_optimization: false`).
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `summary` | `object` | `objective` (`minimize_odd_code_distance_subject_to_union_bound`), `selected_code_distance_d`, `selected_row`, counts, `best_fit_distance_d_by_reported_total_residual` (among budget-satisfying `d`, minimizes \|data+factories − reported total\| when inputs exist). |
+| `candidates` | `array \| null` | Full scan table when `qec.emit_optimization_trace: true`; otherwise `null`. Each row: `distance_d`, `union_bound_mass`, `satisfies_budget`, optional patch/data-plane/total/residual fields. |
 
 ## `timing`
 
@@ -167,6 +182,7 @@ Evaluable formula strings follow **Python** syntax for powers (`**`, not `^`).
 - `qec_distance_resolution` **heuristic_union_bound** is a phenomenological proxy, **not** the paper-specific distance optimizer in Gidney & Ekerå (2021).
 - `timing.schedule_model_v1` is a coarse bound (depth scaling ÷ factory count); use pinned Table 2 wall-clock for regression against the paper.
 - `layout_estimate.derived_non_data_overhead_physical_qubits` is a residual (total minus naive data plane), not a decomposed factory layout.
+- `layout_optimization` is a **tabular scan** over `d`, not a placement or routing optimizer.
 - No endorsement of feasibility; warnings highlight missing inputs, naive products, and branch cuts (e.g. T-factory fallback).
 
 ## Contract history

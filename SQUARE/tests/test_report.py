@@ -83,6 +83,12 @@ def test_build_report_rsa2048_parallel() -> None:
     assert le["reported_end_to_end_physical_qubits"] == pytest.approx(20e6)
     assert le["derived_non_data_overhead_physical_qubits"] == pytest.approx(20e6 - logical * per_log)
 
+    lo = report["layout_optimization"]
+    assert lo is not None
+    assert lo["summary"]["selected_code_distance_d"] == 25
+    assert lo["summary"]["objective"] == "minimize_odd_code_distance_subject_to_union_bound"
+    assert lo["candidates"] is None
+
     assert report["layers"]["magic_aux"] is not None
     assert report["layers"]["magic_aux"]["header"]["document_id"] == "t_factory_fallback_gidney_ekera_2021"
 
@@ -113,6 +119,24 @@ def test_build_report_with_code_distance_evaluates_patch_and_rollup() -> None:
     assert pr["patch_formula_status"] == "evaluated"
 
     json.dumps(report)
+
+
+def test_emit_optimization_trace_includes_layout_candidates(tmp_path: Path) -> None:
+    root = find_square_root()
+    scenario_src = root / "Configs" / "rsa2048_gidney_ekera_2021_parallel.yaml"
+    text = scenario_src.read_text(encoding="utf-8")
+    assert "emit_optimization_trace" not in text
+    text = text.replace(
+        "logical_error_budget: 0.1\n",
+        "logical_error_budget: 0.1\n  emit_optimization_trace: true\n",
+    )
+    scenario_copy = tmp_path / "scenario_trace.yaml"
+    scenario_copy.write_text(text, encoding="utf-8")
+    report = build_scenario_report(load_scenario_bundle(scenario_copy, root=root))
+    cand = report["layout_optimization"]["candidates"]
+    assert cand is not None
+    assert len(cand) >= 10
+    assert any(r["distance_d"] == 25 for r in cand)
 
 
 def test_report_markdown_contains_scenario_name() -> None:

@@ -12,6 +12,7 @@ from typing import Any, Mapping
 
 from square.formula_eval import FormulaEvalError, eval_numeric_formula, eval_numeric_formula_with_bindings
 from square.loader import ScenarioBundle
+from square.layout_optimization import build_layout_distance_candidates, summarize_layout_optimization
 from square.qec_distance_heuristic import suggest_surface_code_distance_union_bound
 from square.schedule_heuristic import build_parallel_depth_schedule_v1, infer_reaction_limited_from_scenario
 
@@ -244,6 +245,10 @@ def _resolve_code_distance_full(
     min_d = int(_param_entry_float(qec.get("heuristic_distance_min_d"), 5))
     max_d = int(_param_entry_float(qec.get("heuristic_distance_max_d"), 55))
 
+    dist_opt_raw = qec_block.get("distance_optimizer", "discrete_scan")
+    dist_opt = str(dist_opt_raw).strip().lower() if dist_opt_raw is not None else "discrete_scan"
+    use_discrete_scan = dist_opt != "closed_form"
+
     d, hmeta = suggest_surface_code_distance_union_bound(
         physical_gate_error_rate=p,
         logical_qubit_count=lq_val,
@@ -253,6 +258,7 @@ def _resolve_code_distance_full(
         phenomenological_prefactor=pref,
         min_d=min_d,
         max_d=max_d,
+        use_discrete_scan=use_discrete_scan,
     )
     warnings.append(
         "code distance d from heuristic_union_bound (phenomenological model), "
@@ -264,9 +270,92 @@ def _resolve_code_distance_full(
             "distance_d": d,
             "heuristic": hmeta,
             "logical_error_budget": budget_f,
+            "distance_optimizer": "discrete_scan" if use_discrete_scan else "closed_form",
         }
     )
     return d, meta
+
+
+def _build_layout_optimization_block(
+    *,
+    scenario: Mapping[str, Any],
+    modality: Mapping[str, Any],
+    qec: Mapping[str, Any],
+    evaluated: Mapping[str, Any],
+    patch_formula: str | None,
+    logical_qubits: float | None,
+    selected_d: int | None,
+    reported_total_physical_qubits: float | None,
+    factory_footprint_physical_qubits: float | None,
+    warnings: list[str],
+) -> dict[str, Any] | None:
+    """
+    Per-distance layout proxy: union-bound mass + patch formula → data-plane qubits (+ optional fit to reported total).
+    """
+    qec_block = scenario.get("qec") if isinstance(scenario.get("qec"), dict) else {}
+    if qec_block.get("emit_layout_optimization") is False:
+        return None
+
+    if patch_formula is None or logical_qubits is None or selected_d is None:
+        return None
+
+    gate_entry = modality.get("characteristic_physical_gate_error_rate")
+    p: float | None = None
+    if isinstance(gate_entry, dict) and gate_entry.get("value") is not None:
+        try:
+            p = float(gate_entry["value"])
+        except (TypeError, ValueError):
+            p = None
+
+    depth_l = evaluated.get("abstract_measurement_depth_layers")
+    dp_val: float | None = None
+    if isinstance(depth_l, dict) and depth_l.get("value") is not None:
+        try:
+            dp_val = float(depth_l["value"])
+        except (TypeError, ValueError):
+            dp_val = None
+
+    if p is None or dp_val is None:
+        return None
+
+    budget_raw = qec_block.get("logical_error_budget", 0.1)
+    try:
+        budget_f = float(budget_raw)
+    except (TypeError, ValueError):
+        budget_f = 0.1
+
+    p_th = _param_entry_float(qec.get("heuristic_surface_code_physical_threshold_order_of_magnitude"), 0.01)
+    pref = _param_entry_float(qec.get("heuristic_logical_error_prefactor"), 0.05)
+    min_d = int(_param_entry_float(qec.get("heuristic_distance_min_d"), 5))
+    max_d = int(_param_entry_float(qec.get("heuristic_distance_max_d"), 55))
+
+    candidates = build_layout_distance_candidates(
+        patch_formula=patch_formula,
+        logical_qubits=float(logical_qubits),
+        physical_gate_error_rate=p,
+        qec_cycle_count_proxy=dp_val,
+        logical_error_budget=budget_f,
+        phenomenological_p_th=p_th,
+        phenomenological_prefactor=pref,
+        min_d=min_d,
+        max_d=max_d,
+        reported_total_physical_qubits=reported_total_physical_qubits,
+        factory_footprint_physical_qubits=factory_footprint_physical_qubits,
+    )
+    summary = summarize_layout_optimization(
+        selected_d=int(selected_d),
+        candidates=candidates,
+        logical_error_budget=budget_f,
+        patch_formula=patch_formula,
+    )
+    emit_trace = bool(qec_block.get("emit_optimization_trace", False))
+    warnings.append(
+        "layout_optimization scans patch scaling vs d; it is not a full device placement optimizer."
+    )
+    return {
+        "summary": summary,
+        "candidates": candidates if emit_trace else None,
+    }
 
 
 def build_scenario_report(
@@ -512,6 +601,19 @@ def build_scenario_report(
         "provenance": "layout_proxy_v1",
     }
 
+    layout_optimization = _build_layout_optimization_block(
+        scenario=scenario,
+        modality=bundle.modality,
+        qec=bundle.qec,
+        evaluated=evaluated,
+        patch_formula=patch_formula,
+        logical_qubits=logical_qubits_val,
+        selected_d=d_resolved,
+        reported_total_physical_qubits=reported_total_physical_qubits,
+        factory_footprint_physical_qubits=factory_footprint_from_yaml,
+        warnings=warnings,
+    )
+
     naive_serial_timing: dict[str, Any] | None = None
     depth_layers = evaluated.get("abstract_measurement_depth_layers")
     cycle_entry = bundle.modality.get("surface_code_cycle_time")
@@ -678,6 +780,7 @@ def build_scenario_report(
         "physical_rollup": physical_rollup,
         "qec_distance_resolution": qec_distance_resolution,
         "layout_estimate": layout_estimate,
+        "layout_optimization": layout_optimization,
         "timing": timing_block,
         "dashboard": {
             "ccz_factory_count": ccz_count,
