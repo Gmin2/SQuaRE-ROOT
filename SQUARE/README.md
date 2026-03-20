@@ -24,6 +24,8 @@ pip install -e ".[dev]"
 pytest
 ```
 
+Build metadata (`*.egg-info/`, `__pycache__/`, `.pytest_cache/`) is gitignored and hidden in the workspace editor settings at the repo root so local installs do not clutter the tree.
+
 Use `square_re.loader.load_scenario_bundle` with a YAML under `Configs/` that lists relative `paths` to modality, `qec_code`, `magic`, `algorithm`, and optional `magic_aux`. Paths are resolved from the repo root (the directory that contains `Assumptions/Schemas.yaml`).
 
 Example scenario: `Configs/rsa2048_gidney_ekera_2021_parallel.yaml`.
