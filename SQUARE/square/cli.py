@@ -35,6 +35,13 @@ def main(argv: list[str] | None = None) -> int:
         help="Override modulus bit length for formula evaluation.",
     )
     parser.add_argument(
+        "--d",
+        type=int,
+        default=None,
+        metavar="DISTANCE",
+        help="Override surface-code distance d (evaluates QEC patch qubit formula).",
+    )
+    parser.add_argument(
         "--markdown",
         action="store_true",
         help="Emit Markdown summary instead of JSON.",
@@ -42,7 +49,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
     bundle = load_scenario_bundle(args.scenario)
-    report = build_scenario_report(bundle, modulus_bits_override=args.n)
+    report = build_scenario_report(
+        bundle,
+        modulus_bits_override=args.n,
+        code_distance_override=args.d,
+    )
 
     if args.markdown:
         sys.stdout.write(report_to_markdown(report))

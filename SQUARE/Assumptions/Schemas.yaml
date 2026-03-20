@@ -67,6 +67,8 @@ scenario_file:
     qec_code: { description: Path or document_id under Assumptions/QEC_Codes/. }
     magic: { description: Path or document_id under Assumptions/MagicStateProduction/. }
     algorithm: { description: Path or id under Algorithms/. }
+    qec_code_distance: { description: Optional positive integer; surface-code distance d for evaluating logical_qubit_patch_physical_qubit_count_formula in reports. }
+    qec: { description: Optional nested map; may include code_distance (same role as qec_code_distance). }
 
 # Example entry shape (comment only — use in real files under Modalities/, QEC_Codes/, etc.):
 #   two_qubit_gate_fidelity:

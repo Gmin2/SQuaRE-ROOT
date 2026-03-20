@@ -10,7 +10,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
-from square.formula_eval import FormulaEvalError, eval_numeric_formula
+from square.formula_eval import FormulaEvalError, eval_numeric_formula, eval_numeric_formula_with_bindings
 from square.loader import ScenarioBundle
 
 _REPORT_CONTRACT_VERSION = 1
@@ -100,19 +100,64 @@ def _engine_version() -> str:
         return "0.0.1"
 
 
+def _parse_code_distance(
+    scenario: Mapping[str, Any],
+    *,
+    override: int | None,
+) -> tuple[int | None, list[str]]:
+    """
+    Resolve surface-code distance ``d`` from CLI override, then scenario YAML.
+
+    Supported scenario shapes: top-level ``qec_code_distance: <int>``, or ``qec: { code_distance: <int> }``.
+    """
+    local_warnings: list[str] = []
+    if override is not None:
+        try:
+            d_ov = int(override)
+        except (TypeError, ValueError):
+            local_warnings.append("code_distance override is not an integer; ignoring.")
+            d_ov = None
+        if d_ov is not None and d_ov <= 0:
+            local_warnings.append("code_distance override must be positive; ignoring.")
+            d_ov = None
+        if d_ov is not None:
+            return d_ov, local_warnings
+
+    raw: Any = scenario.get("qec_code_distance")
+    if raw is None and isinstance(scenario.get("qec"), dict):
+        raw = scenario["qec"].get("code_distance")
+
+    if raw is None:
+        return None, local_warnings
+
+    try:
+        d = int(raw)
+    except (TypeError, ValueError):
+        local_warnings.append("Scenario qec_code_distance / qec.code_distance is not an integer; ignoring.")
+        return None, local_warnings
+    if d <= 0:
+        local_warnings.append("Scenario code distance must be positive; ignoring.")
+        return None, local_warnings
+    return d, local_warnings
+
+
 def build_scenario_report(
     bundle: ScenarioBundle,
     *,
     modulus_bits_override: int | None = None,
+    code_distance_override: int | None = None,
 ) -> dict[str, Any]:
     """
     Assemble a JSON-serializable report dict for the given bundle.
 
     :param bundle: Loaded scenario documents.
     :param modulus_bits_override: If set, use this ``n`` instead of ``target.modulus_bit_length``.
+    :param code_distance_override: If set, use this QEC distance ``d`` instead of scenario fields.
     """
     warnings: list[str] = []
     scenario = bundle.scenario
+    d_resolved, d_warns = _parse_code_distance(scenario, override=code_distance_override)
+    warnings.extend(d_warns)
     target = scenario.get("target") if isinstance(scenario.get("target"), dict) else {}
     n_raw = modulus_bits_override if modulus_bits_override is not None else target.get("modulus_bit_length")
     n: int | None
@@ -168,10 +213,31 @@ def build_scenario_report(
     patch_formula: str | None = None
     if isinstance(patch_entry, dict) and isinstance(patch_entry.get("value"), str):
         patch_formula = str(patch_entry["value"])
-        warnings.append(
-            "Surface-code patch formula is present but code distance d is not in the scenario; "
-            "physical qubits per logical are not computed."
-        )
+
+    patch_physical_per_logical: float | None = None
+    qec_patch_status = "no_formula_in_profile"
+    qec_patch_eval_meta: dict[str, Any] | None = None
+
+    if patch_formula:
+        if d_resolved is None:
+            qec_patch_status = "pending_distance_d"
+            warnings.append(
+                "Surface-code patch formula is present but code distance d is not set "
+                "(use scenario qec_code_distance or --d); physical qubits per logical are not computed."
+            )
+        else:
+            try:
+                patch_physical_per_logical = eval_numeric_formula_with_bindings(
+                    patch_formula, {"d": float(d_resolved)}
+                )
+                qec_patch_status = "evaluated"
+                qec_patch_eval_meta = {
+                    "provenance": "computed_from_yaml_formula",
+                    "source_parameter": "logical_qubit_patch_physical_qubit_count_formula",
+                }
+            except (FormulaEvalError, ZeroDivisionError, OverflowError) as exc:
+                qec_patch_status = "eval_failed"
+                warnings.append(f"Could not evaluate QEC patch formula: {exc}")
 
     table2_block = scenario.get("table2_reference_row")
     ccz_count = None
@@ -245,6 +311,30 @@ def build_scenario_report(
         mx_h, mx_p = _split_document(bundle.magic_aux)
         magic_aux_layer = {"header": mx_h, "parameters": mx_p}
 
+    logical_qubits_val: float | None = None
+    abs_lq = evaluated.get("abstract_logical_qubits")
+    if isinstance(abs_lq, dict) and abs_lq.get("value") is not None:
+        try:
+            logical_qubits_val = float(abs_lq["value"])
+        except (TypeError, ValueError):
+            logical_qubits_val = None
+
+    approx_data_physical: float | None = None
+    if logical_qubits_val is not None and patch_physical_per_logical is not None:
+        approx_data_physical = logical_qubits_val * patch_physical_per_logical
+        warnings.append(
+            "approximate_data_plane_physical_qubits = abstract_logical_qubits × physical_qubits_per_logical; "
+            "excludes magic-state factories, routing, classical control footprint, and other non-data overhead."
+        )
+
+    physical_rollup: dict[str, Any] = {
+        "code_distance_d": d_resolved,
+        "physical_qubits_per_logical": patch_physical_per_logical,
+        "abstract_logical_qubits_at_n": logical_qubits_val,
+        "approximate_data_plane_physical_qubits": approx_data_physical,
+        "patch_formula_status": qec_patch_status,
+    }
+
     report: dict[str, Any] = {
         "report_contract_version": _REPORT_CONTRACT_VERSION,
         "engine": {"name": "square", "version": _engine_version()},
@@ -276,11 +366,13 @@ def build_scenario_report(
         "qec_overhead": {
             "logical_qubit_patch_physical_qubit_count": {
                 "formula": patch_formula,
-                "distance_d": None,
-                "physical_qubits_per_logical": None,
-                "status": "pending_distance_d" if patch_formula else "no_formula_in_profile",
+                "distance_d": d_resolved,
+                "physical_qubits_per_logical": patch_physical_per_logical,
+                "status": qec_patch_status,
+                **(qec_patch_eval_meta or {}),
             }
         },
+        "physical_rollup": physical_rollup,
         "dashboard": {
             "ccz_factory_count": ccz_count,
             "ccz_factory_parameter_key": factory_param_key,
@@ -291,7 +383,8 @@ def build_scenario_report(
             else None,
             "toffoli_plus_t_halves_billions_at_n": toffoli_b,
             "minimum_spacetime_volume_megaqubitdays_at_n": megaqd,
-            "logical_qubit_physical_qubits_if_distance_d": None,
+            "logical_qubit_physical_qubits_if_distance_d": patch_physical_per_logical,
+            "approximate_data_plane_physical_qubits": approx_data_physical,
             "t_factory_fallback_recommended": t_fallback_recommended,
             "t_factory_transition_modulus_bits_order_of_magnitude": t_transition,
         },
@@ -328,6 +421,8 @@ def report_to_markdown(report: Mapping[str, Any]) -> str:
     lines.append(f"- **Reported RSA-2048 physical qubits (M):** {dash.get('reported_rsa2048_physical_qubits_millions')}\n")
     lines.append(f"- **Toffoli+T/2 (billions) at n:** {dash.get('toffoli_plus_t_halves_billions_at_n')}\n")
     lines.append(f"- **Min. spacetime volume (megaqubit-days) at n:** {dash.get('minimum_spacetime_volume_megaqubitdays_at_n')}\n")
+    lines.append(f"- **Physical qubits / logical (at d):** {dash.get('logical_qubit_physical_qubits_if_distance_d')}\n")
+    lines.append(f"- **Approx. data-plane physical qubits (logical × patch):** {dash.get('approximate_data_plane_physical_qubits')}\n")
     lines.append(f"- **T-factory fallback flagged:** {dash.get('t_factory_fallback_recommended')}\n")
 
     warns = report.get("warnings") or []

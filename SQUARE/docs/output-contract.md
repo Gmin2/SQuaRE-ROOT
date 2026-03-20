@@ -27,6 +27,17 @@ Every report is a JSON-serializable object with at least:
 | `algorithm_metrics` | `object` | Numeric roll-up at the scenario’s `n` (and optional pinned table entries from YAML). |
 | `dashboard` | `object` | Cross-layer headline numbers for quick comparison (may include `null` where data is missing). |
 | `qec_overhead` | `object` | Slots for code-distance-dependent overhead (e.g. patch qubit formula + `d`); see below. |
+| `physical_rollup` | `object` | End-to-end **data-plane** physical qubit roll-up when both `n` and `d` are available; see below. |
+
+## Scenario inputs for `d`
+
+Reports fill QEC patch metrics when **code distance** is supplied:
+
+| Source | Precedence |
+|--------|------------|
+| CLI `--d` | Highest (override). |
+| `qec_code_distance` | Top-level scenario integer. |
+| `qec.code_distance` | Nested under `qec:` in the scenario file. |
 
 ## `layers` shape
 
@@ -60,7 +71,8 @@ Headline fields (all optional / nullable):
 | `logical_qubits_at_n` | Evaluated abstract logical qubits at `n`. |
 | `toffoli_plus_t_halves_billions_at_n` | From pinned row at `n` when available, else `null`. |
 | `minimum_spacetime_volume_megaqubitdays_at_n` | From pinned row at `n` when available. |
-| `logical_qubit_physical_qubits_if_distance_d` | `null` until a concrete code distance `d` is supplied by a future scenario or engine. |
+| `logical_qubit_physical_qubits_if_distance_d` | Physical qubits per logical from the QEC profile patch formula evaluated at scenario/CLI `d`; `null` if `d` or formula missing. |
+| `approximate_data_plane_physical_qubits` | `abstract_logical_qubits × physical_qubits_per_logical` when both exist; `null` otherwise. Naive data-qubit proxy (see warnings). |
 | `t_factory_fallback_recommended` | From `magic_aux` when `n` exceeds the documented CCZ error-budget transition scale. |
 | `t_factory_transition_modulus_bits_order_of_magnitude` | From `magic_aux` when present (paper’s approximate transition scale). |
 | `ccz_factory_parameter_key` | Magic YAML parameter key whose `value` matches the inferred CCZ count, when found. |
@@ -74,12 +86,26 @@ Headline fields (all optional / nullable):
 |-----|-------------|
 | `formula` | String from the QEC profile when available. |
 | `distance_d` | Code distance when supplied by the scenario/engine; otherwise `null`. |
-| `physical_qubits_per_logical` | `2*(d+1)^2` (or evaluated formula) when `d` is known; otherwise `null`. |
-| `status` | `"pending_distance_d"` when a formula exists but `d` is missing; `"no_formula_in_profile"` otherwise. |
+| `physical_qubits_per_logical` | Evaluated patch formula at `d` when possible; otherwise `null`. |
+| `status` | `"evaluated"` \| `"pending_distance_d"` \| `"no_formula_in_profile"` \| `"eval_failed"`. |
+| `provenance` | When evaluated: `"computed_from_yaml_formula"`. |
+| `source_parameter` | When evaluated: e.g. `logical_qubit_patch_physical_qubit_count_formula`. |
+
+## `physical_rollup`
+
+| Key | Description |
+|-----|-------------|
+| `code_distance_d` | Resolved `d` or `null`. |
+| `physical_qubits_per_logical` | Same as `qec_overhead.logical_qubit_patch_physical_qubit_count.physical_qubits_per_logical`. |
+| `abstract_logical_qubits_at_n` | From `algorithm_metrics.evaluated.abstract_logical_qubits.value` when present. |
+| `approximate_data_plane_physical_qubits` | Product when both factors exist; mirrors `dashboard.approximate_data_plane_physical_qubits`. |
+| `patch_formula_status` | Same string as `qec_overhead...status`. |
 
 ## Provenance
 
 Per-parameter `source`, `date`, `doi`, `section`, and `confidence` are **passed through** from YAML; the report does not invent citations. Values computed only for display (e.g. formula evaluation) appear under `algorithm_metrics.evaluated` with `provenance: "computed_from_yaml_formula"` in the implementation’s internal structure where applicable.
+
+Evaluable formula strings follow **Python** syntax for powers (`**`, not `^`).
 
 ## Serial formats
 
@@ -88,5 +114,5 @@ Per-parameter `source`, `date`, `doi`, `section`, and `confidence` are **passed 
 
 ## Non-goals (current contract)
 
-- No single “total physical qubit count” derived from logical qubits × patch formula without an optimizer-provided `d`.
-- No endorsement of feasibility; warnings highlight missing inputs and branch cuts (e.g. T-factory fallback).
+- `approximate_data_plane_physical_qubits` is **not** a full device layout count (magic factories, routing, distillation footprint, etc.).
+- No endorsement of feasibility; warnings highlight missing inputs, naive products, and branch cuts (e.g. T-factory fallback).

@@ -42,6 +42,8 @@ After install, load a scenario and print a report:
 square-report Configs/rsa2048_gidney_ekera_2021_parallel.yaml
 square-report Configs/rsa2048_gidney_ekera_2021_parallel.yaml --markdown
 python -m square Configs/rsa2048_gidney_ekera_2021_parallel.yaml
+# Optional: supply surface-code distance d (or set qec_code_distance in the scenario YAML)
+python -m square Configs/rsa2048_gidney_ekera_2021_parallel.yaml --d 17
 ```
 
 From Python: `square.build_scenario_report(square.load_scenario_bundle(path))` and optional `square.report_to_markdown(...)`.

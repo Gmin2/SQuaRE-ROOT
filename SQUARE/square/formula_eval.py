@@ -1,10 +1,11 @@
-"""Restricted evaluation of algorithm formulas in ``n`` with ``log2``."""
+"""Restricted evaluation of YAML formulas (e.g. in ``n`` or ``d``) with ``log2``."""
 
 from __future__ import annotations
 
 import ast
 import math
 import operator
+from collections.abc import Mapping
 from typing import Any
 
 
@@ -39,11 +40,32 @@ def eval_numeric_formula(expression: str, n: float) -> float:
     """
     if n <= 0:
         raise FormulaEvalError("n must be positive")
+    return eval_numeric_formula_with_bindings(expression, {"n": float(n)})
+
+
+def eval_numeric_formula_with_bindings(expression: str, bindings: Mapping[str, float]) -> float:
+    """
+    Evaluate a numeric expression using only names present in ``bindings`` plus ``log2``.
+
+    Typical keys: ``\"n\"`` (modulus bits) for algorithm YAML, ``\"d\"`` (code distance) for QEC YAML.
+
+    :param expression: Source string from YAML.
+    :param bindings: Map of allowed variable names to positive numeric values (must be > 0 for each).
+    :returns: Floating-point result.
+    :raises FormulaEvalError: if parsing fails or the expression uses disallowed constructs.
+    """
+    if not bindings:
+        raise FormulaEvalError("bindings must be non-empty")
+    for name, val in bindings.items():
+        if val <= 0:
+            raise FormulaEvalError(f"binding {name!r} must be positive")
 
     try:
         tree = ast.parse(expression, mode="eval")
-    except SyntaxError as exc:  # pragma: no cover - ast re-raises as FormulaEvalError below
+    except SyntaxError as exc:  # pragma: no cover - covered via FormulaEvalError path
         raise FormulaEvalError(str(exc)) from exc
+
+    allowed = frozenset(bindings)
 
     def _eval(node: ast.AST) -> float:
         if isinstance(node, ast.Expression):
@@ -53,8 +75,8 @@ def eval_numeric_formula(expression: str, n: float) -> float:
                 return float(node.value)
             raise FormulaEvalError("Only numeric constants are allowed")
         if isinstance(node, ast.Name):
-            if node.id == "n":
-                return float(n)
+            if node.id in allowed:
+                return float(bindings[node.id])
             raise FormulaEvalError(f"Disallowed name: {node.id!r}")
         if isinstance(node, ast.BinOp):
             op_type = type(node.op)

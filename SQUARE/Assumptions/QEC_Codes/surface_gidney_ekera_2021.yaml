@@ -21,7 +21,7 @@ code_family:
   layer: qec
 
 logical_qubit_patch_physical_qubit_count_formula:
-  value: "2 * (d + 1)^2"
+  value: "2 * (d + 1)**2"
   unit: "physical_qubits_as_function_of_distance_d"
   confidence: estimated
   source: "Gidney & Ekerå, Quantum 2021 (Figure 8; text in Section 1.1)"
