@@ -38,3 +38,40 @@ logical_operations_implementation:
   date: "2021-04-15"
   section: "Section 1.1"
   layer: qec
+
+# Tunables for reports when scenarios set qec.distance_policy: heuristic_union_bound (phenomenological; not the paper optimizer).
+heuristic_surface_code_physical_threshold_order_of_magnitude:
+  value: 0.01
+  unit: "error_probability_per_gate"
+  confidence: speculative
+  source: "Order-of-magnitude surface-code threshold scale; replace with calibrated value for your stack."
+  date: "2025-03-20"
+  section: "SQuaRE report heuristic"
+  layer: qec
+
+heuristic_logical_error_prefactor:
+  value: 0.05
+  unit: "dimensionless"
+  confidence: speculative
+  source: "Leading coefficient in phenomenological logical error model used only for heuristic distance suggestions."
+  date: "2025-03-20"
+  section: "SQuaRE report heuristic"
+  layer: qec
+
+heuristic_distance_min_d:
+  value: 5
+  unit: "count"
+  confidence: speculative
+  source: "Clamp for heuristic distance suggestions in reports."
+  date: "2025-03-20"
+  section: "SQuaRE report heuristic"
+  layer: qec
+
+heuristic_distance_max_d:
+  value: 55
+  unit: "count"
+  confidence: speculative
+  source: "Clamp for heuristic distance suggestions in reports."
+  date: "2025-03-20"
+  section: "SQuaRE report heuristic"
+  layer: qec

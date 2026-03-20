@@ -9,6 +9,11 @@ target:
   modulus_bit_length: 2048
   problem: rsa_integer_factoring
 
+# Phenomenological union-bound heuristic for d (not the paper’s optimizer). Override with top-level qec_code_distance or CLI --d.
+qec:
+  distance_policy: heuristic_union_bound
+  logical_error_budget: 0.1
+
 table2_reference_row:
   value: "ours_2019_parallel_28_ccz"
   unit: "descriptor"

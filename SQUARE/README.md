@@ -36,13 +36,19 @@ New YAML contributions must satisfy `Schemas.yaml` (document header + provenance
 
 The **output contract** for machine-readable reports is `docs/output-contract.md` (`report_contract_version`).
 
+Reports include:
+
+- **`qec_distance_resolution`** — how code distance `d` was chosen: CLI `--d`, explicit `qec_code_distance` / `qec.code_distance`, or `qec.distance_policy: heuristic_union_bound` (phenomenological union bound over logical qubits × depth proxy; **not** the Gidney & Ekerå optimizer).
+- **`layout_estimate`** — naive data-plane qubit product; **derived non-data overhead** = Table 2 pinned total minus data plane when both exist; optional `physical_qubits_per_ccz_factory_approximate` in magic YAML for an explicit factory footprint.
+- **`timing`** — Table 2 pins, naive depth×cycle, **`schedule_model_v1`** (depth × effective layer time ÷ CCZ count, reaction-aware when inferred), and **calibration ratios** vs pinned wall-clock (see `docs/output-contract.md` non-goals).
+
 After install, load a scenario and print a report:
 
 ```bash
 square-report Configs/rsa2048_gidney_ekera_2021_parallel.yaml
 square-report Configs/rsa2048_gidney_ekera_2021_parallel.yaml --markdown
 python -m square Configs/rsa2048_gidney_ekera_2021_parallel.yaml
-# Optional: supply surface-code distance d (or set qec_code_distance in the scenario YAML)
+# Optional: override heuristic d (scenario may set qec.distance_policy or explicit qec_code_distance)
 python -m square Configs/rsa2048_gidney_ekera_2021_parallel.yaml --d 17
 ```
 

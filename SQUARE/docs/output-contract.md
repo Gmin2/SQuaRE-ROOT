@@ -15,7 +15,7 @@ Every report is a JSON-serializable object with at least:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `report_contract_version` | `number` | Contract version (currently `1`). |
+| `report_contract_version` | `number` | Contract version (currently `2`). |
 | `engine` | `object` | `{ "name": "square", "version": "<package version>" }`. |
 | `generated_at` | `string` | ISO-8601 UTC timestamp when the report was built. |
 | `warnings` | `array` | Human-readable strings for caveats (missing distance `d`, symbolic formulas, branch flags). |
@@ -28,16 +28,24 @@ Every report is a JSON-serializable object with at least:
 | `dashboard` | `object` | Cross-layer headline numbers for quick comparison (may include `null` where data is missing). |
 | `qec_overhead` | `object` | Slots for code-distance-dependent overhead (e.g. patch qubit formula + `d`); see below. |
 | `physical_rollup` | `object` | End-to-end **data-plane** physical qubit roll-up when both `n` and `d` are available; see below. |
+| `timing` | `object` | Table 2 pins, naive depth×cycle, optional schedule heuristic + calibration; see below. |
+| `qec_distance_resolution` | `object` | How `d` was chosen (`cli_override`, `explicit_scenario`, `heuristic_union_bound`, etc.). |
+| `layout_estimate` | `object` | Data-plane proxy, pinned end-to-end qubits, derived non-data overhead, optional YAML factory footprint; see below. |
 
 ## Scenario inputs for `d`
 
-Reports fill QEC patch metrics when **code distance** is supplied:
+Reports fill QEC patch metrics when **code distance** is resolved:
 
 | Source | Precedence |
 |--------|------------|
 | CLI `--d` | Highest (override). |
 | `qec_code_distance` | Top-level scenario integer. |
 | `qec.code_distance` | Nested under `qec:` in the scenario file. |
+| `qec.distance_policy` | If set to `heuristic_union_bound` (aliases: `optimize_heuristic`, `heuristic`) and explicit `d` is absent, use phenomenological heuristic (see `qec_distance_resolution`). |
+
+Optional scenario keys for the heuristic: `qec.logical_error_budget` (default `0.1`). Tunables live on the QEC profile (`heuristic_*` parameters in YAML).
+
+Optional schedule steering: `schedule.reaction_limited` (`boolean`); otherwise inferred from `table2_reference_row` / factory key text (`distillation` → not reaction-limited for the simple model).
 
 ## `layers` shape
 
@@ -77,6 +85,46 @@ Headline fields (all optional / nullable):
 | `t_factory_transition_modulus_bits_order_of_magnitude` | From `magic_aux` when present (paper’s approximate transition scale). |
 | `ccz_factory_parameter_key` | Magic YAML parameter key whose `value` matches the inferred CCZ count, when found. |
 | `rsa_2048_reported_physical_qubits_millions_key` | Magic YAML key used for the RSA-2048 headline, when resolved. |
+| `rsa_2048_reported_megaqubit_days_key` | Magic YAML key for Table 2 megaqubit-days pin at RSA-2048, when resolved. |
+| `reported_rsa2048_megaqubit_days` | Pinned megaqubit-days from magic YAML when `rsa_2048_reported_megaqubit_days_*_ccz` matches inferred CCZ count. |
+| `rsa_2048_reported_wall_clock_days_key` | Magic YAML key for Table 2 wall-clock days pin, when resolved. |
+| `reported_rsa2048_wall_clock_days` | Pinned wall-clock days from magic YAML when `rsa_2048_reported_wall_clock_days_*_ccz` matches inferred CCZ count. |
+| `naive_serial_time_days_from_depth_times_cycle` | `abstract_measurement_depth_layers × surface_code_cycle_time` (µs) converted to days; `null` if inputs missing. **Not** the paper’s scheduled wall time. |
+| `code_distance_d` | Resolved distance used for patch evaluation (mirror of `qec_overhead...distance_d`). |
+| `qec_distance_resolution_mode` | Short string from `qec_distance_resolution.mode`. |
+| `derived_non_data_overhead_physical_qubits` | When Table 2 total qubits and data-plane proxy exist: `reported_total − approximate_data_plane` (remainder lumped: factories, routing, etc.). |
+| `factory_footprint_physical_qubits_from_yaml` | `ccz_factory_count × physical_qubits_per_ccz_factory_approximate` when the magic YAML parameter is present. |
+| `schedule_model_v1_wall_clock_days` | Heuristic parallel-depth schedule (see `timing.schedule_model_v1`). |
+| `schedule_calibration_ratio_table2_over_model_v1` | Pinned Table 2 wall-clock divided by `schedule_model_v1` days when both exist (highlights model mismatch). |
+
+## `qec_distance_resolution`
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `mode` | `string` | `cli_override` \| `explicit_scenario` \| `heuristic_union_bound` \| `unset` \| failure modes (`heuristic_failed_*`). |
+| `distance_d` | `number \| null` | Resolved `d` when available. |
+| `heuristic` | `object` | Present for `heuristic_union_bound`; echoes inputs and phenomenological metadata. |
+| `logical_error_budget` | `number` | Budget passed into the heuristic when applicable. |
+
+## `layout_estimate`
+
+| Key | Description |
+|-----|-------------|
+| `approximate_data_plane_physical_qubits` | Same idea as `dashboard.approximate_data_plane_physical_qubits`. |
+| `reported_end_to_end_physical_qubits` | Table 2 pinned millions × `1e6` when available. |
+| `derived_non_data_overhead_physical_qubits` | `max(0, reported_end_to_end − data_plane)` when both exist. |
+| `factory_footprint_physical_qubits_from_yaml` | Optional explicit factory footprint from magic YAML. |
+| `physical_qubits_per_ccz_factory_approximate_key` | Name of the magic YAML key when used. |
+| `provenance` | `layout_proxy_v1`. |
+
+## `timing`
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `reported_table2_pinned` | `object \| null` | When CCZ count is inferred from `table2_reference_row`: `physical_qubits_millions`, `megaqubit_days`, `wall_clock_days` and YAML keys used (`*_key` fields). `provenance`: `pinned_in_magic_yaml_table2`. |
+| `naive_serial_from_measurement_depth` | `object \| null` | When evaluated abstract measurement depth and modality `surface_code_cycle_time` exist: `abstract_measurement_depth_layers`, `surface_code_cycle_time_microseconds`, `serial_time_microseconds`, `serial_time_days`, `source_parameters`, `provenance`: `computed_from_measurement_depth_times_surface_cycle`. |
+| `schedule_model_v1` | `object \| null` | `parallel_depth_over_ccz_paths_v1`: `depth × effective_layer_time / max(1, ccz_count)` with `effective_layer_time = max(cycle, reaction)` when reaction-limited. Includes `reaction_limited_inferred_from`. |
+| `schedule_calibration` | `object \| null` | Ratios comparing naive serial vs model and Table 2 pinned wall-clock vs model (`ratio_table2_pinned_over_model_v1`). |
 
 ## `qec_overhead`
 
@@ -115,4 +163,15 @@ Evaluable formula strings follow **Python** syntax for powers (`**`, not `^`).
 ## Non-goals (current contract)
 
 - `approximate_data_plane_physical_qubits` is **not** a full device layout count (magic factories, routing, distillation footprint, etc.).
+- `timing.naive_serial_from_measurement_depth` is **not** comparable to Table 2 wall-clock; it ignores parallelism, reaction vs distillation limits, and magic-state scheduling.
+- `qec_distance_resolution` **heuristic_union_bound** is a phenomenological proxy, **not** the paper-specific distance optimizer in Gidney & Ekerå (2021).
+- `timing.schedule_model_v1` is a coarse bound (depth scaling ÷ factory count); use pinned Table 2 wall-clock for regression against the paper.
+- `layout_estimate.derived_non_data_overhead_physical_qubits` is a residual (total minus naive data plane), not a decomposed factory layout.
 - No endorsement of feasibility; warnings highlight missing inputs, naive products, and branch cuts (e.g. T-factory fallback).
+
+## Contract history
+
+| `report_contract_version` | Summary |
+|---------------------------|---------|
+| `1` | Initial report envelope (no `timing.schedule_model_v1`, `layout_estimate`, or heuristic `d`). |
+| `2` | Adds `qec_distance_resolution`, `layout_estimate`, extended `timing`, and heuristic distance policy. |

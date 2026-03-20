@@ -84,3 +84,72 @@ rsa_2048_reported_physical_qubits_millions_28_ccz:
   date: "2021-04-15"
   section: "Table 2"
   layer: magic
+
+# Table 2 headline time / spacetime columns for RSA n=2048 (same rows as physical qubit pins above).
+rsa_2048_reported_megaqubit_days_1_ccz:
+  value: 90
+  unit: "megaqubit_days"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Table 2 row: ours 2019, 1 factory)"
+  date: "2021-04-15"
+  section: "Table 2"
+  notes: Distillation-limited ripple-carry row; pairs with rsa_2048_reported_physical_qubits_millions_1_ccz.
+  layer: magic
+
+rsa_2048_reported_megaqubit_days_14_ccz:
+  value: 6.6
+  unit: "megaqubit_days"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Table 2 row: ours 2019, 1 thread)"
+  date: "2021-04-15"
+  section: "Table 2"
+  layer: magic
+
+rsa_2048_reported_megaqubit_days_28_ccz:
+  value: 5.9
+  unit: "megaqubit_days"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Table 2 row: ours 2019, parallel)"
+  date: "2021-04-15"
+  section: "Table 2"
+  layer: magic
+
+rsa_2048_reported_wall_clock_days_1_ccz:
+  value: 6
+  unit: "days"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Table 2 row: ours 2019, 1 factory)"
+  date: "2021-04-15"
+  section: "Table 2"
+  layer: magic
+
+rsa_2048_reported_wall_clock_days_14_ccz:
+  value: 0.36
+  unit: "days"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Table 2 row: ours 2019, 1 thread)"
+  date: "2021-04-15"
+  section: "Table 2"
+  layer: magic
+
+rsa_2048_reported_wall_clock_days_28_ccz:
+  value: 0.31
+  unit: "days"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Table 2 row: ours 2019, parallel)"
+  date: "2021-04-15"
+  section: "Table 2"
+  layer: magic
+
+# Optional: explicit factory footprint when not using derived_non_data_overhead from Table 2 total minus data plane.
+physical_qubits_per_ccz_factory_approximate:
+  value: 10000
+  unit: "physical_qubits"
+  confidence: speculative
+  source: "Order-of-magnitude placeholder for CCZ factory + local routing; replace with layout-extracted value when available."
+  date: "2025-03-20"
+  section: "SQuaRE layout proxy"
+  notes: >-
+    Report still prefers derived_non_data_overhead_physical_qubits (pinned total minus naive data plane) when
+    rsa_2048_reported_physical_qubits_millions_*_ccz is present.
+  layer: magic

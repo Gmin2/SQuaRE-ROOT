@@ -12,8 +12,10 @@ from typing import Any, Mapping
 
 from square.formula_eval import FormulaEvalError, eval_numeric_formula, eval_numeric_formula_with_bindings
 from square.loader import ScenarioBundle
+from square.qec_distance_heuristic import suggest_surface_code_distance_union_bound
+from square.schedule_heuristic import build_parallel_depth_schedule_v1, infer_reaction_limited_from_scenario
 
-_REPORT_CONTRACT_VERSION = 1
+_REPORT_CONTRACT_VERSION = 2
 
 _HEADER_KEYS = frozenset(
     {
@@ -91,6 +93,16 @@ def _find_ccz_factory_parameter_key(magic: Mapping[str, Any], ccz: int) -> str |
     return None
 
 
+def _magic_float_by_key(magic: Mapping[str, Any], key: str) -> float | None:
+    entry = magic.get(key)
+    if not isinstance(entry, dict) or entry.get("value") is None:
+        return None
+    try:
+        return float(entry["value"])
+    except (TypeError, ValueError):
+        return None
+
+
 def _engine_version() -> str:
     try:
         from importlib.metadata import version
@@ -141,6 +153,122 @@ def _parse_code_distance(
     return d, local_warnings
 
 
+def _param_entry_float(entry: Any, default: float) -> float:
+    if isinstance(entry, dict) and entry.get("value") is not None:
+        try:
+            return float(entry["value"])
+        except (TypeError, ValueError):
+            return default
+    return default
+
+
+def _resolve_code_distance_full(
+    scenario: Mapping[str, Any],
+    *,
+    override: int | None,
+    modality: Mapping[str, Any],
+    qec: Mapping[str, Any],
+    evaluated: Mapping[str, Any],
+    warnings: list[str],
+) -> tuple[int | None, dict[str, Any]]:
+    """
+    CLI override, explicit scenario distance, or heuristic (when ``qec.distance_policy`` requests it).
+    """
+    meta: dict[str, Any] = {"mode": "unset"}
+
+    if override is not None:
+        d, w = _parse_code_distance(scenario, override=override)
+        warnings.extend(w)
+        meta.update({"mode": "cli_override", "distance_d": d, "from_cli_override": True})
+        return d, meta
+
+    d_explicit, w = _parse_code_distance(scenario, override=None)
+    warnings.extend(w)
+    if d_explicit is not None:
+        meta.update({"mode": "explicit_scenario", "distance_d": d_explicit, "explicit_in_scenario": True})
+        return d_explicit, meta
+
+    qec_block = scenario.get("qec") if isinstance(scenario.get("qec"), dict) else {}
+    policy_raw = qec_block.get("distance_policy") or qec_block.get("distance_mode")
+    policy = str(policy_raw).strip().lower() if policy_raw is not None else ""
+    heuristic_aliases = frozenset({"heuristic_union_bound", "optimize_heuristic", "heuristic"})
+    if policy not in heuristic_aliases:
+        meta["distance_d"] = None
+        return None, meta
+
+    gate_entry = modality.get("characteristic_physical_gate_error_rate")
+    p: float | None = None
+    if isinstance(gate_entry, dict) and gate_entry.get("value") is not None:
+        try:
+            p = float(gate_entry["value"])
+        except (TypeError, ValueError):
+            p = None
+    if p is None:
+        warnings.append(
+            "qec.distance_policy requests a heuristic but modality characteristic_physical_gate_error_rate "
+            "is missing or non-numeric; distance d not computed."
+        )
+        meta.update({"mode": "heuristic_failed_missing_p", "distance_d": None})
+        return None, meta
+
+    abs_lq = evaluated.get("abstract_logical_qubits")
+    depth_l = evaluated.get("abstract_measurement_depth_layers")
+    lq_val: float | None = None
+    dp_val: float | None = None
+    if isinstance(abs_lq, dict) and abs_lq.get("value") is not None:
+        try:
+            lq_val = float(abs_lq["value"])
+        except (TypeError, ValueError):
+            lq_val = None
+    if isinstance(depth_l, dict) and depth_l.get("value") is not None:
+        try:
+            dp_val = float(depth_l["value"])
+        except (TypeError, ValueError):
+            dp_val = None
+    if lq_val is None or dp_val is None:
+        warnings.append(
+            "Heuristic distance skipped: need evaluated abstract_logical_qubits and abstract_measurement_depth_layers."
+        )
+        meta.update({"mode": "heuristic_failed_missing_formulas", "distance_d": None})
+        return None, meta
+
+    budget_raw = qec_block.get("logical_error_budget", 0.1)
+    try:
+        budget_f = float(budget_raw)
+    except (TypeError, ValueError):
+        budget_f = 0.1
+        warnings.append("qec.logical_error_budget invalid; using 0.1.")
+
+    p_th = _param_entry_float(qec.get("heuristic_surface_code_physical_threshold_order_of_magnitude"), 0.01)
+    pref = _param_entry_float(qec.get("heuristic_logical_error_prefactor"), 0.05)
+    min_d = int(_param_entry_float(qec.get("heuristic_distance_min_d"), 5))
+    max_d = int(_param_entry_float(qec.get("heuristic_distance_max_d"), 55))
+
+    d, hmeta = suggest_surface_code_distance_union_bound(
+        physical_gate_error_rate=p,
+        logical_qubit_count=lq_val,
+        qec_cycle_count_proxy=dp_val,
+        logical_error_budget=budget_f,
+        phenomenological_p_th=p_th,
+        phenomenological_prefactor=pref,
+        min_d=min_d,
+        max_d=max_d,
+    )
+    warnings.append(
+        "code distance d from heuristic_union_bound (phenomenological model), "
+        "not the paper-specific optimizer in Gidney & Ekerå 2021."
+    )
+    meta.update(
+        {
+            "mode": "heuristic_union_bound",
+            "distance_d": d,
+            "heuristic": hmeta,
+            "logical_error_budget": budget_f,
+        }
+    )
+    return d, meta
+
+
 def build_scenario_report(
     bundle: ScenarioBundle,
     *,
@@ -156,8 +284,6 @@ def build_scenario_report(
     """
     warnings: list[str] = []
     scenario = bundle.scenario
-    d_resolved, d_warns = _parse_code_distance(scenario, override=code_distance_override)
-    warnings.extend(d_warns)
     target = scenario.get("target") if isinstance(scenario.get("target"), dict) else {}
     n_raw = modulus_bits_override if modulus_bits_override is not None else target.get("modulus_bit_length")
     n: int | None
@@ -209,6 +335,15 @@ def build_scenario_report(
 
     pinned = _pinned_algorithm_entries_for_n(algo, n) if n is not None else {}
 
+    d_resolved, qec_distance_resolution = _resolve_code_distance_full(
+        scenario,
+        override=code_distance_override,
+        modality=bundle.modality,
+        qec=bundle.qec,
+        evaluated=evaluated,
+        warnings=warnings,
+    )
+
     patch_entry = bundle.qec.get("logical_qubit_patch_physical_qubit_count_formula")
     patch_formula: str | None = None
     if isinstance(patch_entry, dict) and isinstance(patch_entry.get("value"), str):
@@ -223,7 +358,8 @@ def build_scenario_report(
             qec_patch_status = "pending_distance_d"
             warnings.append(
                 "Surface-code patch formula is present but code distance d is not set "
-                "(use scenario qec_code_distance or --d); physical qubits per logical are not computed."
+                "(use scenario qec_code_distance, qec.distance_policy heuristic, or --d); "
+                "physical qubits per logical are not computed."
             )
         else:
             try:
@@ -248,6 +384,10 @@ def build_scenario_report(
 
     rsa2048_phys: float | None = None
     phys_key: str | None = None
+    rsa2048_megaqd: float | None = None
+    mega_key: str | None = None
+    rsa2048_wall_days: float | None = None
+    wall_key: str | None = None
     factory_param_key: str | None = None
     if ccz_count is not None:
         phys_key = f"rsa_2048_reported_physical_qubits_millions_{ccz_count}_ccz"
@@ -263,6 +403,23 @@ def build_scenario_report(
                 f"No magic YAML entry {phys_key!r} for inferred CCZ count {ccz_count}; "
                 "dashboard physical qubit headline omitted."
             )
+
+        mega_key = f"rsa_2048_reported_megaqubit_days_{ccz_count}_ccz"
+        rsa2048_megaqd = _magic_float_by_key(bundle.magic, mega_key)
+        if rsa2048_megaqd is None:
+            warnings.append(
+                f"No magic YAML entry {mega_key!r} for inferred CCZ count {ccz_count}; "
+                "Table 2 megaqubit-days pin omitted."
+            )
+
+        wall_key = f"rsa_2048_reported_wall_clock_days_{ccz_count}_ccz"
+        rsa2048_wall_days = _magic_float_by_key(bundle.magic, wall_key)
+        if rsa2048_wall_days is None:
+            warnings.append(
+                f"No magic YAML entry {wall_key!r} for inferred CCZ count {ccz_count}; "
+                "Table 2 wall-clock days pin omitted."
+            )
+
         factory_param_key = _find_ccz_factory_parameter_key(bundle.magic, ccz_count)
         if factory_param_key is None:
             warnings.append(f"No ccz_factory_count* row in magic YAML matches count {ccz_count}.")
@@ -327,6 +484,152 @@ def build_scenario_report(
             "excludes magic-state factories, routing, classical control footprint, and other non-data overhead."
         )
 
+    reported_total_physical_qubits: float | None = None
+    if rsa2048_phys is not None:
+        reported_total_physical_qubits = float(rsa2048_phys) * 1e6
+
+    derived_non_data_overhead_physical_qubits: float | None = None
+    if reported_total_physical_qubits is not None and approx_data_physical is not None:
+        derived_non_data_overhead_physical_qubits = max(0.0, reported_total_physical_qubits - approx_data_physical)
+        warnings.append(
+            "derived_non_data_overhead_physical_qubits = Table-2-pinned total qubits minus naive data-plane product; "
+            "attributes remainder to factories, routing, distillation, control, etc. without splitting them."
+        )
+
+    per_ccz_factory_qubits = _magic_float_by_key(bundle.magic, "physical_qubits_per_ccz_factory_approximate")
+    factory_footprint_from_yaml: float | None = None
+    if ccz_count is not None and per_ccz_factory_qubits is not None:
+        factory_footprint_from_yaml = float(ccz_count) * float(per_ccz_factory_qubits)
+
+    layout_estimate: dict[str, Any] = {
+        "approximate_data_plane_physical_qubits": approx_data_physical,
+        "reported_end_to_end_physical_qubits": reported_total_physical_qubits,
+        "derived_non_data_overhead_physical_qubits": derived_non_data_overhead_physical_qubits,
+        "factory_footprint_physical_qubits_from_yaml": factory_footprint_from_yaml,
+        "physical_qubits_per_ccz_factory_approximate_key": "physical_qubits_per_ccz_factory_approximate"
+        if per_ccz_factory_qubits is not None
+        else None,
+        "provenance": "layout_proxy_v1",
+    }
+
+    naive_serial_timing: dict[str, Any] | None = None
+    depth_layers = evaluated.get("abstract_measurement_depth_layers")
+    cycle_entry = bundle.modality.get("surface_code_cycle_time")
+    if isinstance(depth_layers, dict) and depth_layers.get("value") is not None:
+        try:
+            depth_val = float(depth_layers["value"])
+        except (TypeError, ValueError):
+            depth_val = None
+        if depth_val is not None and isinstance(cycle_entry, dict) and cycle_entry.get("value") is not None:
+            try:
+                cycle_us = float(cycle_entry["value"])
+            except (TypeError, ValueError):
+                cycle_us = None
+            if cycle_us is not None:
+                serial_us = depth_val * cycle_us
+                serial_days = serial_us / (1e6 * 86400.0)
+                naive_serial_timing = {
+                    "abstract_measurement_depth_layers": depth_val,
+                    "surface_code_cycle_time_microseconds": cycle_us,
+                    "serial_time_microseconds": serial_us,
+                    "serial_time_days": serial_days,
+                    "provenance": "computed_from_measurement_depth_times_surface_cycle",
+                    "source_parameters": {
+                        "depth": "abstract_measurement_depth_formula",
+                        "cycle": "surface_code_cycle_time",
+                    },
+                }
+                warnings.append(
+                    "naive_serial_time_days = abstract_measurement_depth_layers × surface_code_cycle_time; "
+                    "assumes one code cycle per abstract layer, no parallelism, no reaction/distillation limits — "
+                    "not comparable to Table 2 wall-clock without the paper’s full schedule."
+                )
+
+    table2_row_text: str | None = None
+    if isinstance(table2_block, dict) and table2_block.get("value") is not None:
+        table2_row_text = str(table2_block.get("value"))
+    schedule_model_v1: dict[str, Any] | None = None
+    schedule_calibration: dict[str, Any] | None = None
+    reaction_entry = bundle.modality.get("classical_control_reaction_time")
+    reaction_us: float | None = None
+    if isinstance(reaction_entry, dict) and reaction_entry.get("value") is not None:
+        try:
+            reaction_us = float(reaction_entry["value"])
+        except (TypeError, ValueError):
+            reaction_us = None
+
+    if (
+        isinstance(depth_layers, dict)
+        and depth_layers.get("value") is not None
+        and isinstance(cycle_entry, dict)
+        and cycle_entry.get("value") is not None
+        and reaction_us is not None
+        and ccz_count is not None
+    ):
+        try:
+            depth_val_s = float(depth_layers["value"])
+            cycle_us_s = float(cycle_entry["value"])
+        except (TypeError, ValueError):
+            depth_val_s = None
+            cycle_us_s = None
+        if depth_val_s is not None and cycle_us_s is not None:
+            rlim, rsrc = infer_reaction_limited_from_scenario(
+                scenario,
+                table2_row_value=table2_row_text,
+                factory_parameter_key=factory_param_key,
+            )
+            schedule_model_v1 = build_parallel_depth_schedule_v1(
+                abstract_measurement_depth_layers=depth_val_s,
+                surface_code_cycle_microseconds=cycle_us_s,
+                classical_reaction_microseconds=reaction_us,
+                ccz_factory_count=int(ccz_count),
+                reaction_limited=rlim,
+            )
+            schedule_model_v1["reaction_limited_inferred_from"] = rsrc
+            warnings.append(
+                "schedule_model_v1 uses depth/(CCZ factories) with an effective layer time; "
+                "it is a coarse bound, not the paper’s compiled schedule."
+            )
+            if naive_serial_timing and naive_serial_timing.get("serial_time_days") is not None:
+                naive_d = float(naive_serial_timing["serial_time_days"])
+                model_d = float(schedule_model_v1["wall_clock_days"])
+                schedule_calibration = {
+                    "naive_serial_time_days": naive_d,
+                    "schedule_model_v1_wall_clock_days": model_d,
+                    "ratio_naive_serial_over_model_v1": naive_d / model_d if model_d > 0 else None,
+                    "provenance": "ratio_of_estimates",
+                }
+            if rsa2048_wall_days is not None and schedule_model_v1.get("wall_clock_days") is not None:
+                pinned_d = float(rsa2048_wall_days)
+                model_d2 = float(schedule_model_v1["wall_clock_days"])
+                schedule_calibration = schedule_calibration or {}
+                schedule_calibration.update(
+                    {
+                        "table2_pinned_wall_clock_days": pinned_d,
+                        "ratio_table2_pinned_over_model_v1": pinned_d / model_d2 if model_d2 > 0 else None,
+                    }
+                )
+
+    reported_table2_timing: dict[str, Any] | None = None
+    if ccz_count is not None:
+        reported_table2_timing = {
+            "ccz_factory_count": ccz_count,
+            "physical_qubits_millions": rsa2048_phys,
+            "physical_qubits_millions_key": phys_key,
+            "megaqubit_days": rsa2048_megaqd,
+            "megaqubit_days_key": mega_key if rsa2048_megaqd is not None else None,
+            "wall_clock_days": rsa2048_wall_days,
+            "wall_clock_days_key": wall_key if rsa2048_wall_days is not None else None,
+            "provenance": "pinned_in_magic_yaml_table2",
+        }
+
+    timing_block: dict[str, Any] = {
+        "reported_table2_pinned": reported_table2_timing,
+        "naive_serial_from_measurement_depth": naive_serial_timing,
+        "schedule_model_v1": schedule_model_v1,
+        "schedule_calibration": schedule_calibration,
+    }
+
     physical_rollup: dict[str, Any] = {
         "code_distance_d": d_resolved,
         "physical_qubits_per_logical": patch_physical_per_logical,
@@ -373,11 +676,21 @@ def build_scenario_report(
             }
         },
         "physical_rollup": physical_rollup,
+        "qec_distance_resolution": qec_distance_resolution,
+        "layout_estimate": layout_estimate,
+        "timing": timing_block,
         "dashboard": {
             "ccz_factory_count": ccz_count,
             "ccz_factory_parameter_key": factory_param_key,
             "rsa_2048_reported_physical_qubits_millions_key": phys_key,
             "reported_rsa2048_physical_qubits_millions": rsa2048_phys,
+            "rsa_2048_reported_megaqubit_days_key": mega_key,
+            "reported_rsa2048_megaqubit_days": rsa2048_megaqd,
+            "rsa_2048_reported_wall_clock_days_key": wall_key,
+            "reported_rsa2048_wall_clock_days": rsa2048_wall_days,
+            "naive_serial_time_days_from_depth_times_cycle": naive_serial_timing["serial_time_days"]
+            if naive_serial_timing
+            else None,
             "logical_qubits_at_n": evaluated.get("abstract_logical_qubits", {}).get("value")
             if isinstance(evaluated.get("abstract_logical_qubits"), dict)
             else None,
@@ -387,6 +700,18 @@ def build_scenario_report(
             "approximate_data_plane_physical_qubits": approx_data_physical,
             "t_factory_fallback_recommended": t_fallback_recommended,
             "t_factory_transition_modulus_bits_order_of_magnitude": t_transition,
+            "code_distance_d": d_resolved,
+            "qec_distance_resolution_mode": qec_distance_resolution.get("mode"),
+            "derived_non_data_overhead_physical_qubits": derived_non_data_overhead_physical_qubits,
+            "factory_footprint_physical_qubits_from_yaml": factory_footprint_from_yaml,
+            "schedule_model_v1_wall_clock_days": schedule_model_v1.get("wall_clock_days")
+            if schedule_model_v1
+            else None,
+            "schedule_calibration_ratio_table2_over_model_v1": schedule_calibration.get(
+                "ratio_table2_pinned_over_model_v1"
+            )
+            if schedule_calibration
+            else None,
         },
     }
 
@@ -421,8 +746,27 @@ def report_to_markdown(report: Mapping[str, Any]) -> str:
     lines.append(f"- **Reported RSA-2048 physical qubits (M):** {dash.get('reported_rsa2048_physical_qubits_millions')}\n")
     lines.append(f"- **Toffoli+T/2 (billions) at n:** {dash.get('toffoli_plus_t_halves_billions_at_n')}\n")
     lines.append(f"- **Min. spacetime volume (megaqubit-days) at n:** {dash.get('minimum_spacetime_volume_megaqubitdays_at_n')}\n")
+    lines.append(
+        f"- **Table 2 pinned (RSA-2048, inferred CCZ): megaqubit-days:** {dash.get('reported_rsa2048_megaqubit_days')}, "
+        f"**wall-clock days:** {dash.get('reported_rsa2048_wall_clock_days')}\n"
+    )
+    lines.append(
+        f"- **Naive serial time (depth × surface cycle, not Table 2 wall-clock):** "
+        f"{dash.get('naive_serial_time_days_from_depth_times_cycle')} days\n"
+    )
+    lines.append(f"- **Code distance d (resolved):** {dash.get('code_distance_d')} (`{dash.get('qec_distance_resolution_mode')}`)\n")
     lines.append(f"- **Physical qubits / logical (at d):** {dash.get('logical_qubit_physical_qubits_if_distance_d')}\n")
     lines.append(f"- **Approx. data-plane physical qubits (logical × patch):** {dash.get('approximate_data_plane_physical_qubits')}\n")
+    lines.append(
+        f"- **Derived non-data overhead (pinned total − data plane):** {dash.get('derived_non_data_overhead_physical_qubits')}\n"
+    )
+    lines.append(
+        f"- **Factory footprint from YAML (count × per-factory):** {dash.get('factory_footprint_physical_qubits_from_yaml')}\n"
+    )
+    lines.append(f"- **Schedule model v1 wall-clock (days):** {dash.get('schedule_model_v1_wall_clock_days')}\n")
+    lines.append(
+        f"- **Table2 / schedule_model_v1 ratio:** {dash.get('schedule_calibration_ratio_table2_over_model_v1')}\n"
+    )
     lines.append(f"- **T-factory fallback flagged:** {dash.get('t_factory_fallback_recommended')}\n")
 
     warns = report.get("warnings") or []
