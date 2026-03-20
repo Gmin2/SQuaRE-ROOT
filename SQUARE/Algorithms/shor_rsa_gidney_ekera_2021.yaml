@@ -1,0 +1,123 @@
+# Abstract-circuit and problem-size assumptions for RSA factoring via Gidney & Ekerå 2021 construction.
+document_id: shor_rsa_gidney_ekera_2021
+schema_version: 1
+primary_reference: >-
+  Gidney, C. & Ekerå, M. How to factor 2048 bit RSA integers in 8 hours using 20 million noisy qubits.
+  Quantum 5, 433 (2021).
+doi: "10.22331/q-2021-04-15-433"
+arxiv: "1905.09749"
+date_issued: "2021-04-15"
+notes: >
+  Uses Ekerå–Håstad RSA factoring (short discrete log). Exponent-register size scales as ne ≈ 1.5 n
+  versus 2n in vanilla Shor. Asymptotic abstract costs follow Table 1 row “(ours) 2019”. Physical
+  resource totals require composed modality + QEC + magic scenario (Table 2).
+
+cryptographic_problem:
+  value: "rsa_integer_factoring"
+  unit: "descriptor"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Section 2.1; Table 1)"
+  date: "2021-04-15"
+  section: "Section 2.1"
+  layer: algorithm
+
+quantum_algorithm_family:
+  value: "shor_family_ekera_hastad_rsa"
+  unit: "descriptor"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Section 2.1)"
+  date: "2021-04-15"
+  section: "Section 2.1"
+  layer: algorithm
+
+exponent_register_qubits_ne_asymptotic:
+  value: "1.5 * n + O(1)"
+  unit: "qubits_as_function_of_modulus_bits_n"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Section 2.1; ne = 3m, m = 0.5 n + O(1))"
+  date: "2021-04-15"
+  section: "Section 2.1"
+  notes: Vanilla Shor uses ne ≈ 2n; reduction drives fewer modular multiplications at given n.
+  layer: algorithm
+
+abstract_logical_qubits_formula:
+  value: "3 * n + 0.002 * n * log2(n)"
+  unit: "logical_qubits_as_function_of_modulus_bits_n"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Table 1, row ours 2019)"
+  date: "2021-04-15"
+  section: "Table 1"
+  layer: algorithm
+
+abstract_measurement_depth_formula:
+  value: "500 * n**2 + n**2 * log2(n)"
+  unit: "layers_as_function_of_modulus_bits_n"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Table 1, row ours 2019)"
+  date: "2021-04-15"
+  section: "Table 1"
+  layer: algorithm
+
+abstract_toffoli_plus_t_halves_count_formula:
+  value: "0.3 * n**3 + 0.0005 * n**3 * log2(n)"
+  unit: "gates_as_function_of_modulus_bits_n"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Table 1, row ours 2019)"
+  date: "2021-04-15"
+  section: "Table 1"
+  layer: algorithm
+
+toffoli_plus_t_halves_count_billions_n_1024:
+  value: 0.4
+  unit: "billions_of_toffoli_plus_t_halves"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Table 1, row ours 2019)"
+  date: "2021-04-15"
+  section: "Table 1"
+  layer: algorithm
+
+toffoli_plus_t_halves_count_billions_n_2048:
+  value: 2.7
+  unit: "billions_of_toffoli_plus_t_halves"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Table 1, row ours 2019)"
+  date: "2021-04-15"
+  section: "Table 1"
+  layer: algorithm
+
+toffoli_plus_t_halves_count_billions_n_3072:
+  value: 9.9
+  unit: "billions_of_toffoli_plus_t_halves"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Table 1, row ours 2019)"
+  date: "2021-04-15"
+  section: "Table 1"
+  layer: algorithm
+
+minimum_spacetime_volume_megaqubitdays_n_1024:
+  value: 0.5
+  unit: "megaqubit_days"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Table 1, row ours 2019)"
+  date: "2021-04-15"
+  section: "Table 1"
+  notes: Uses modern surface-code constructions in table footnote; not raw abstract volume alone.
+  layer: algorithm
+
+minimum_spacetime_volume_megaqubitdays_n_2048:
+  value: 5.9
+  unit: "megaqubit_days"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Table 1, row ours 2019)"
+  date: "2021-04-15"
+  section: "Table 1"
+  layer: algorithm
+
+minimum_spacetime_volume_megaqubitdays_n_3072:
+  value: 21.0
+  unit: "megaqubit_days"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Table 1, row ours 2019)"
+  date: "2021-04-15"
+  section: "Table 1"
+  layer: algorithm

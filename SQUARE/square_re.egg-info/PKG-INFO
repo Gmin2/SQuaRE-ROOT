@@ -1,3 +1,15 @@
+Metadata-Version: 2.4
+Name: square-re
+Version: 0.0.1
+Summary: SQuaRE — quantum resource estimation assumptions and loader
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: pyyaml>=6
+Provides-Extra: dev
+Requires-Dist: pytest>=7; extra == "dev"
+Dynamic: license-file
+
 # SQuaRE
 
 This repository is for the Sentried Quantum Resource Estimation tool, known as SQuaRE, for gauging the resources needed to break encryption schemes, specifically ECC but others as well. The purpose of this tool is to inform and educate people on the threat of quantum computing enhanced attacks.

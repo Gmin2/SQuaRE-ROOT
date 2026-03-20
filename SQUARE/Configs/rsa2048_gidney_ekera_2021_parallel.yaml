@@ -1,0 +1,21 @@
+# Composes Gidney & Ekerå 2021 assumptions for RSA n=2048, Table 2 “parallel / 28 CCZ” style layout.
+schema_version: 1
+scenario: rsa2048_gidney_ekera_2021_parallel
+description: >-
+  RSA-2048 factoring resource estimate baseline matching Table 2 row “(ours) 2019 (parallel)”:
+  28 CCZ factories, reaction-limited carry runways, 0.1% gate error, 1 µs cycle, 10 µs reaction.
+
+target:
+  modulus_bit_length: 2048
+  problem: rsa_integer_factoring
+
+table2_reference_row:
+  value: "ours_2019_parallel_28_ccz"
+  unit: "descriptor"
+
+paths:
+  modality: Assumptions/Modalities/superconducting_gidney_ekera_2021.yaml
+  qec_code: Assumptions/QEC_Codes/surface_gidney_ekera_2021.yaml
+  magic: Assumptions/MagicStateProduction/ccz_factory_gidney_ekera_2021.yaml
+  magic_aux: Assumptions/MagicStateProduction/t_factory_fallback_gidney_ekera_2021.yaml
+  algorithm: Algorithms/shor_rsa_gidney_ekera_2021.yaml

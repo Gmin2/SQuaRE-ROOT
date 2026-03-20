@@ -1,0 +1,11 @@
+LICENSE
+README.md
+pyproject.toml
+square_re/__init__.py
+square_re/loader.py
+square_re.egg-info/PKG-INFO
+square_re.egg-info/SOURCES.txt
+square_re.egg-info/dependency_links.txt
+square_re.egg-info/requires.txt
+square_re.egg-info/top_level.txt
+tests/test_loader.py
