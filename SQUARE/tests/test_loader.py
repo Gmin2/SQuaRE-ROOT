@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from square_re.loader import find_square_root, load_scenario_bundle
+from square.loader import find_square_root, load_scenario_bundle
 
 
 def test_find_square_root_from_repo() -> None:
