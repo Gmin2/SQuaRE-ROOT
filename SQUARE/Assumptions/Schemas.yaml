@@ -1,0 +1,79 @@
+# SQuaRE assumptions schema — contract for YAML under Assumptions/
+# Aligns with the OSRE memo: provenance, no hidden constants, versioned evolution.
+schema_version: 1
+
+enums:
+  confidence:
+    description: >
+      How strongly the value is supported. Use consistently across the assumptions DB.
+    allowed:
+      - proven
+      - estimated
+      - speculative
+  layer:
+    description: Stack layer that owns a parameter (for grouping and validation).
+    allowed:
+      - physical
+      - qcvv_qem
+      - qec
+      - magic
+      - system
+      - algorithm
+
+# Every file under Modalities/, QEC_Codes/, or MagicStateProduction/ SHOULD start with this block.
+document_header:
+  required_fields:
+    document_id:
+      description: Stable slug; use in scenarios and code (e.g. superconducting_gidney_ekera_2021).
+    schema_version:
+      description: Assumptions schema version this file targets; must match top-level schema_version here.
+    primary_reference:
+      description: Human-readable citation for the main source of defaults in this file.
+  optional_fields:
+    doi: { description: DOI for the primary reference when available. }
+    arxiv: { description: arXiv id (e.g. 1905.09749) when applicable. }
+    date_issued: { description: ISO-8601 date for the reference or file freeze. }
+    notes: { description: Scope limits, simplifications, or cross-file dependencies. }
+
+# Each quantified assumption is a mapping keyed by parameter name. Required/optional keys per entry:
+parameter_entry:
+  required:
+    value:
+      description: Scalar, or structured value (e.g. min/max) if documented in notes.
+    unit:
+      description: Physical or logical unit, or convention string (e.g. "1 - error_rate", "microseconds").
+    confidence:
+      description: One of enums.confidence.allowed.
+    source:
+      description: Short attribution (paper name, lab, or "this document").
+    date:
+      description: ISO-8601 date the value was taken or asserted.
+  optional:
+    doi: { description: DOI specific to this parameter when different from document header. }
+    section: { description: Figure, table, or section pointer in the primary reference. }
+    notes: { description: Extra context, caveats, or derivation sketch. }
+    layer: { description: One of enums.layer.allowed when useful for tooling. }
+    applies_to_modality: { description: Slug of modality profile if parameter is not universal. }
+    deprecated_in_favor_of: { description: Replacement parameter key or document_id if superseded. }
+
+# Scenario files live under ../Configs/ (see repo README). Optional contract for later loaders:
+scenario_file:
+  description: >
+    Composes modality, QEC, magic, and algorithm profiles by reference paths or document_id.
+  suggested_fields:
+    scenario: { description: Stable scenario name. }
+    schema_version: { description: Same as assumptions schema_version. }
+    modality: { description: Path or document_id under Assumptions/Modalities/. }
+    qec_code: { description: Path or document_id under Assumptions/QEC_Codes/. }
+    magic: { description: Path or document_id under Assumptions/MagicStateProduction/. }
+    algorithm: { description: Path or id under Algorithms/. }
+
+# Example entry shape (comment only — use in real files under Modalities/, QEC_Codes/, etc.):
+#   two_qubit_gate_fidelity:
+#     value: 0.999
+#     unit: "1 - error_rate"
+#     confidence: proven
+#     source: "…"
+#     date: "2024-12-09"
+#     doi: "10.1038/…"
+#     notes: "…"

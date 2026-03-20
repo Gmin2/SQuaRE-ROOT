@@ -1,0 +1,44 @@
+# T-factory path when the CCZ factory error budget is exceeded (large problem sizes in same paper).
+document_id: t_factory_fallback_gidney_ekera_2021
+schema_version: 1
+primary_reference: >-
+  Gidney, C. & Ekerå, M. How to factor 2048 bit RSA integers in 8 hours using 20 million noisy qubits.
+  Quantum 5, 433 (2021).
+doi: "10.22331/q-2021-04-15-433"
+arxiv: "1905.09749"
+date_issued: "2021-04-15"
+notes: >
+  Figure 1 (and its caption) states that past ~n ≈ 32786 the construction exceeds the CCZ factory
+  error budget and the model switches to the T factory of Fowler et al. This file flags that branch;
+  detailed T-factory YAML should cite the original factory reference when implementing throughput.
+
+t_factory_used_beyond_ccz_error_budget:
+  value: true
+  unit: "boolean"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Figure 1 caption)"
+  date: "2021-04-15"
+  section: "Figure 1 caption"
+  notes: >
+    Discrete jump in resource estimates in Figure 1 attributed to switching from CCZ factory
+    (Litinski 2019 / ref [36] in paper) to T factory (Fowler et al. 2012 / ref [27]).
+  layer: magic
+
+modulus_bit_length_ccz_to_t_transition_order_of_magnitude:
+  value: 32786
+  unit: "bits"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Figure 1 caption)"
+  date: "2021-04-15"
+  section: "Figure 1 caption"
+  notes: Stated as approximate location of the jump; not a sharp universal constant across all tunings.
+  layer: magic
+
+fallback_non_clifford_mechanism:
+  value: "t_distillation_fowler_et_al_style"
+  unit: "descriptor"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Figure 1 caption; cites Fowler et al. 2012)"
+  date: "2021-04-15"
+  section: "Figure 1 caption"
+  layer: magic
