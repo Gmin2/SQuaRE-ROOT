@@ -31,3 +31,17 @@ Use `square.loader.load_scenario_bundle` with a YAML under `Configs/` that lists
 Example scenario: `Configs/rsa2048_gidney_ekera_2021_parallel.yaml`.
 
 New YAML contributions must satisfy `Schemas.yaml` (document header + provenance on every parameter: `value`, `unit`, `confidence`, `source`, `date`; add `doi` / `section` / `notes` when useful).
+
+### Reports (JSON / Markdown)
+
+The **output contract** for machine-readable reports is `docs/output-contract.md` (`report_contract_version`).
+
+After install, load a scenario and print a report:
+
+```bash
+square-report Configs/rsa2048_gidney_ekera_2021_parallel.yaml
+square-report Configs/rsa2048_gidney_ekera_2021_parallel.yaml --markdown
+python -m square Configs/rsa2048_gidney_ekera_2021_parallel.yaml
+```
+
+From Python: `square.build_scenario_report(square.load_scenario_bundle(path))` and optional `square.report_to_markdown(...)`.

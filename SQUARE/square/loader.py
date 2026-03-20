@@ -91,7 +91,14 @@ def load_scenario_bundle(
             raise KeyError(f"paths.{key} is required and must be non-empty")
 
     def _resolve(rel: str) -> Path:
+        if not isinstance(rel, str) or not rel.strip():
+            raise ValueError(f"Invalid path reference: {rel!r}")
         candidate = (base / rel).resolve()
+        base_resolved = base.resolve()
+        try:
+            candidate.relative_to(base_resolved)
+        except ValueError as exc:
+            raise ValueError(f"Path escapes SQuaRE root: {rel!r}") from exc
         if not candidate.is_file():
             raise FileNotFoundError(f"Referenced file does not exist: {candidate}")
         return candidate
@@ -103,7 +110,7 @@ def load_scenario_bundle(
 
     magic_aux: dict[str, Any] | None = None
     aux = paths.get("magic_aux")
-    if aux:
+    if aux is not None and str(aux).strip():
         magic_aux = _load_yaml(_resolve(str(aux)))
 
     return ScenarioBundle(
