@@ -14,13 +14,15 @@ enums:
     description: Stack layer that owns a parameter (for grouping and validation).
     allowed:
       - physical
+      - qcvv
+      - qem
       - qcvv_qem
       - qec
       - magic
       - system
       - algorithm
 
-# Every file under Modalities/, QEC_Codes/, or MagicStateProduction/ SHOULD start with this block.
+# Every file under Modalities/, QEC_Codes/, MagicStateProduction/, QCVV/, or QEM/ SHOULD start with this block.
 document_header:
   required_fields:
     document_id:
@@ -56,10 +58,16 @@ parameter_entry:
     applies_to_modality: { description: Slug of modality profile if parameter is not universal. }
     deprecated_in_favor_of: { description: Replacement parameter key or document_id if superseded. }
 
+# Structured reference tables: a single parameter_entry may use ``value:`` as a nested map or list of maps
+# (e.g. paper Table 1 pins by n, or Table 2 rows keyed by ccz_factories). Keep full provenance on that
+# parent entry; use a descriptive ``unit`` string (e.g. paper_table1_pins_by_modulus_bits).
+
 # Scenario files live under ../Configs/ (see repo README). Optional contract for later loaders:
 scenario_file:
   description: >
     Composes modality, QEC, magic, and algorithm profiles by reference paths or document_id.
+    Under ``paths``, optional ``qcvv`` and ``qem`` reference YAML under Assumptions/QCVV/ and
+    Assumptions/QEM/ respectively (same header + parameter_entry contract as other assumption dirs).
   suggested_fields:
     scenario: { description: Stable scenario name. }
     schema_version: { description: Same as assumptions schema_version. }
@@ -67,6 +75,9 @@ scenario_file:
     qec_code: { description: Path or document_id under Assumptions/QEC_Codes/. }
     magic: { description: Path or document_id under Assumptions/MagicStateProduction/. }
     algorithm: { description: Path or id under Algorithms/. }
+    paths_magic_aux: { description: "Optional under paths: magic_aux YAML (e.g. T-factory branch flags)." }
+    paths_qcvv: { description: "Optional under paths: QCVV profile under Assumptions/QCVV/." }
+    paths_qem: { description: "Optional under paths: QEM profile under Assumptions/QEM/." }
     qec_code_distance: { description: Optional positive integer; surface-code distance d for evaluating logical_qubit_patch_physical_qubit_count_formula in reports. }
     qec: { description: Optional nested map; may include code_distance, distance_policy (e.g. heuristic_union_bound), logical_error_budget, distance_optimizer (discrete_scan or closed_form), emit_optimization_trace, emit_layout_optimization (default on). }
     schedule: { description: Optional nested map; e.g. reaction_limited bool to steer simple schedule heuristics in reports. }

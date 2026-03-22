@@ -1,0 +1,29 @@
+# Placeholder QCVV profile: no effective adjustment to physical error rates or schedules.
+document_id: qcvv_identity_no_overhead
+schema_version: 1
+primary_reference: >-
+  SQuaRE internal placeholder — no external paper; use when QCVV is not modeled.
+date_issued: "2025-03-20"
+notes: >
+  Multipliers are 1.0 so resource engines can treat “QCVV present” uniformly without changing
+  numbers until real characterization profiles are added.
+
+effective_physical_error_rate_multiplier_from_characterization:
+  value: 1.0
+  unit: "dimensionless"
+  confidence: proven
+  source: "this document (identity placeholder)"
+  date: "2025-03-20"
+  section: "SQuaRE QCVV stub"
+  notes: Multiply modality-reported per-gate error proxies when QCVV tightens or loosens bounds.
+  layer: qcvv
+
+calibration_cycle_overhead_multiplier:
+  value: 1.0
+  unit: "dimensionless"
+  confidence: proven
+  source: "this document (identity placeholder)"
+  date: "2025-03-20"
+  section: "SQuaRE QCVV stub"
+  notes: Placeholder for extra wall time or layers due to recalibration / drift tracking.
+  layer: qcvv

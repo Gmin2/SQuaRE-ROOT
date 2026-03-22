@@ -67,57 +67,24 @@ abstract_toffoli_plus_t_halves_count_formula:
   section: "Table 1"
   layer: algorithm
 
-toffoli_plus_t_halves_count_billions_n_1024:
-  value: 0.4
-  unit: "billions_of_toffoli_plus_t_halves"
+# Single structured block for Table 1 paper-pinned headline numbers (avoids six flat *_n_* keys).
+paper_table1_pins_by_modulus_bit_length:
+  value:
+    "1024":
+      toffoli_plus_t_halves_billions: 0.4
+      minimum_spacetime_volume_megaqubit_days: 0.5
+    "2048":
+      toffoli_plus_t_halves_billions: 2.7
+      minimum_spacetime_volume_megaqubit_days: 5.9
+    "3072":
+      toffoli_plus_t_halves_billions: 9.9
+      minimum_spacetime_volume_megaqubit_days: 21.0
+  unit: "paper_table1_pins_by_modulus_bits"
   confidence: estimated
   source: "Gidney & Ekerå, Quantum 2021 (Table 1, row ours 2019)"
   date: "2021-04-15"
   section: "Table 1"
-  layer: algorithm
-
-toffoli_plus_t_halves_count_billions_n_2048:
-  value: 2.7
-  unit: "billions_of_toffoli_plus_t_halves"
-  confidence: estimated
-  source: "Gidney & Ekerå, Quantum 2021 (Table 1, row ours 2019)"
-  date: "2021-04-15"
-  section: "Table 1"
-  layer: algorithm
-
-toffoli_plus_t_halves_count_billions_n_3072:
-  value: 9.9
-  unit: "billions_of_toffoli_plus_t_halves"
-  confidence: estimated
-  source: "Gidney & Ekerå, Quantum 2021 (Table 1, row ours 2019)"
-  date: "2021-04-15"
-  section: "Table 1"
-  layer: algorithm
-
-minimum_spacetime_volume_megaqubitdays_n_1024:
-  value: 0.5
-  unit: "megaqubit_days"
-  confidence: estimated
-  source: "Gidney & Ekerå, Quantum 2021 (Table 1, row ours 2019)"
-  date: "2021-04-15"
-  section: "Table 1"
-  notes: Uses modern surface-code constructions in table footnote; not raw abstract volume alone.
-  layer: algorithm
-
-minimum_spacetime_volume_megaqubitdays_n_2048:
-  value: 5.9
-  unit: "megaqubit_days"
-  confidence: estimated
-  source: "Gidney & Ekerå, Quantum 2021 (Table 1, row ours 2019)"
-  date: "2021-04-15"
-  section: "Table 1"
-  layer: algorithm
-
-minimum_spacetime_volume_megaqubitdays_n_3072:
-  value: 21.0
-  unit: "megaqubit_days"
-  confidence: estimated
-  source: "Gidney & Ekerå, Quantum 2021 (Table 1, row ours 2019)"
-  date: "2021-04-15"
-  section: "Table 1"
+  notes: >
+    Billions of Toffoli+T/2 and minimum spacetime volume (megaqubit-days) as printed for listed n.
+    Asymptotic formulas above remain the canonical model; these rows are for regression and dashboard pins.
   layer: algorithm

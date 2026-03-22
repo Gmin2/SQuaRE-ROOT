@@ -12,8 +12,10 @@ Versioned quantitative assumptions live under `Assumptions/`:
 | `Assumptions/Modalities/` | Hardware / platform YAML profiles (one primary reference per file where possible). |
 | `Assumptions/QEC_Codes/` | Quantum error correction family and layout assumptions. |
 | `Assumptions/MagicStateProduction/` | Magic state factory and throughput assumptions. |
+| `Assumptions/QCVV/` | Characterization / verification / validation assumptions (optional in scenarios). |
+| `Assumptions/QEM/` | Error-mitigation assumptions (optional; separate file from QCVV). |
 
-Algorithm recipes and logical-depth / T-count style data belong under `Algorithms/`. **Scenarios** that compose modality + QEC + magic + algorithm belong under `Configs/` and should reference the same `schema_version` as `Schemas.yaml`.
+Algorithm recipes and logical-depth / T-count style data belong under `Algorithms/`. **Scenarios** that compose modality + QEC + magic + algorithm belong under `Configs/` and should reference the same `schema_version` as `Schemas.yaml`. Optional `paths.qcvv` and `paths.qem` load additional YAML profiles when present.
 
 ### Python loader
 
@@ -26,7 +28,7 @@ pytest
 
 Build metadata (`*.egg-info/`, `__pycache__/`, `.pytest_cache/`) is gitignored and hidden in the workspace editor settings at the repo root so local installs do not clutter the tree.
 
-Use `square.loader.load_scenario_bundle` with a YAML under `Configs/` that lists relative `paths` to modality, `qec_code`, `magic`, `algorithm`, and optional `magic_aux`. Paths are resolved from the repo root (the directory that contains `Assumptions/Schemas.yaml`).
+Use `square.loader.load_scenario_bundle` with a YAML under `Configs/` that lists relative `paths` to modality, `qec_code`, `magic`, `algorithm`, and optional `magic_aux`, `qcvv`, `qem`. Paths are resolved from the repo root (the directory that contains `Assumptions/Schemas.yaml`).
 
 Example scenario: `Configs/rsa2048_gidney_ekera_2021_parallel.yaml`.
 

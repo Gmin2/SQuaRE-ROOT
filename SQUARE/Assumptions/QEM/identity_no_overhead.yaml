@@ -1,0 +1,29 @@
+# Placeholder QEM profile: no mitigation benefit or extra sampling cost in the stack model.
+document_id: qem_identity_no_overhead
+schema_version: 1
+primary_reference: >-
+  SQuaRE internal placeholder — no external paper; use when QEM is not modeled.
+date_issued: "2025-03-20"
+notes: >
+  Factors are 1.0 so loaders and reports can attach a QEM document without altering roll-ups until
+  real mitigation models are implemented.
+
+effective_logical_error_rate_suppression_factor:
+  value: 1.0
+  unit: "dimensionless"
+  confidence: proven
+  source: "this document (identity placeholder)"
+  date: "2025-03-20"
+  section: "SQuaRE QEM stub"
+  notes: Values below 1 would mean mitigation reduces effective logical error vs bare QEC stack.
+  layer: qem
+
+sampling_shot_overhead_multiplier:
+  value: 1.0
+  unit: "dimensionless"
+  confidence: proven
+  source: "this document (identity placeholder)"
+  date: "2025-03-20"
+  section: "SQuaRE QEM stub"
+  notes: Placeholder for extra circuit executions or classical post-processing cost.
+  layer: qem

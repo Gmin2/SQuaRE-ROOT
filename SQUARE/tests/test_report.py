@@ -29,7 +29,7 @@ def test_build_report_rsa2048_parallel() -> None:
     bundle = load_scenario_bundle(scenario, root=root)
     report = build_scenario_report(bundle)
 
-    assert report["report_contract_version"] == 2
+    assert report["report_contract_version"] == 4
     assert report["scenario"]["scenario"] == "rsa2048_gidney_ekera_2021_parallel"
     assert report["algorithm_metrics"]["n"] == 2048
 
@@ -46,6 +46,9 @@ def test_build_report_rsa2048_parallel() -> None:
 
     dash = report["dashboard"]
     assert dash["ccz_factory_count"] == 28
+    assert dash["table2_pinned_source_parameter"] == "paper_table2_rsa2048_reference_rows"
+    assert dash["table2_pinned_row_layout_descriptor"] == "reaction_limited_carry_runways"
+    assert dash["ccz_factory_parameter_key"] == "reaction_limited_carry_runways"
     assert dash["code_distance_d"] == 25
     assert dash["reported_rsa2048_physical_qubits_millions"] == 20.0
     assert dash["reported_rsa2048_megaqubit_days"] == 5.9
@@ -91,8 +94,44 @@ def test_build_report_rsa2048_parallel() -> None:
 
     assert report["layers"]["magic_aux"] is not None
     assert report["layers"]["magic_aux"]["header"]["document_id"] == "t_factory_fallback_gidney_ekera_2021"
+    assert report["layers"]["qcvv"] is None
+    assert report["layers"]["qem"] is None
+    assert report["sources"]["qcvv"] is None
+    assert report["sources"]["qem"] is None
 
     json.dumps(report)
+
+
+def test_build_report_surfaces_qcvv_qem_layers_when_loaded() -> None:
+    root = find_square_root()
+    scen = root / "Configs" / "_test_qcvv_qem_report.yaml"
+    scen.write_text(
+        "schema_version: 1\nscenario: _test_qcvv_qem_report\ntarget:\n  modulus_bit_length: 2048\n"
+        "  problem: rsa_integer_factoring\nqec:\n  distance_policy: heuristic_union_bound\n"
+        "  logical_error_budget: 0.1\ntable2_reference_row:\n  value: ours_2019_parallel_28_ccz\n"
+        "  unit: descriptor\npaths:\n"
+        "  modality: Assumptions/Modalities/superconducting_gidney_ekera_2021.yaml\n"
+        "  qec_code: Assumptions/QEC_Codes/surface_gidney_ekera_2021.yaml\n"
+        "  magic: Assumptions/MagicStateProduction/ccz_factory_gidney_ekera_2021.yaml\n"
+        "  magic_aux: Assumptions/MagicStateProduction/t_factory_fallback_gidney_ekera_2021.yaml\n"
+        "  algorithm: Algorithms/shor_rsa_gidney_ekera_2021.yaml\n"
+        "  qcvv: Assumptions/QCVV/identity_no_overhead.yaml\n"
+        "  qem: Assumptions/QEM/identity_no_overhead.yaml\n",
+        encoding="utf-8",
+    )
+    try:
+        report = build_scenario_report(load_scenario_bundle(scen, root=root))
+        assert report["layers"]["qcvv"] is not None
+        assert report["layers"]["qcvv"]["header"]["document_id"] == "qcvv_identity_no_overhead"
+        assert report["layers"]["qem"] is not None
+        assert report["layers"]["qem"]["header"]["document_id"] == "qem_identity_no_overhead"
+        assert report["sources"]["qcvv"]["document_id"] == "qcvv_identity_no_overhead"
+        assert report["sources"]["qem"]["document_id"] == "qem_identity_no_overhead"
+        md = report_to_markdown(report)
+        assert "qcvv" in md
+        assert "qem" in md
+    finally:
+        scen.unlink(missing_ok=True)
 
 
 def test_build_report_with_code_distance_evaluates_patch_and_rollup() -> None:

@@ -26,6 +26,8 @@ class ScenarioBundle:
     magic: Mapping[str, Any]
     algorithm: Mapping[str, Any]
     magic_aux: Mapping[str, Any] | None = None
+    qcvv: Mapping[str, Any] | None = None
+    qem: Mapping[str, Any] | None = None
 
 
 def find_square_root(start: Path | None = None) -> Path:
@@ -72,7 +74,8 @@ def load_scenario_bundle(
     Parse ``scenario_path``, load each file listed under ``paths``, return a :class:`ScenarioBundle`.
 
     Required keys under ``paths``: ``modality``, ``qec_code``, ``magic``, ``algorithm``.
-    Optional: ``magic_aux``.
+    Optional: ``magic_aux``, ``qcvv``, ``qem`` (separate assumption documents under
+    ``Assumptions/QCVV/`` and ``Assumptions/QEM/``).
 
     :param scenario_path: YAML file under ``Configs/`` (or any path).
     :param root: SQuaRE root; if omitted, inferred via :func:`find_square_root` from ``scenario_path``.
@@ -113,6 +116,16 @@ def load_scenario_bundle(
     if aux is not None and str(aux).strip():
         magic_aux = _load_yaml(_resolve(str(aux)))
 
+    qcvv_doc: dict[str, Any] | None = None
+    qcvv_path = paths.get("qcvv")
+    if qcvv_path is not None and str(qcvv_path).strip():
+        qcvv_doc = _load_yaml(_resolve(str(qcvv_path)))
+
+    qem_doc: dict[str, Any] | None = None
+    qem_path = paths.get("qem")
+    if qem_path is not None and str(qem_path).strip():
+        qem_doc = _load_yaml(_resolve(str(qem_path)))
+
     return ScenarioBundle(
         scenario=scenario,
         modality=modality,
@@ -120,4 +133,6 @@ def load_scenario_bundle(
         magic=magic,
         algorithm=algorithm,
         magic_aux=magic_aux,
+        qcvv=qcvv_doc,
+        qem=qem_doc,
     )

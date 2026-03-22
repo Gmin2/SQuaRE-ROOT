@@ -8,5 +8,5 @@ Place one logical profile per file (e.g. `ccz_factory_gidney_ekera_2021.yaml`).
 
 | File | Reference |
 |------|-----------|
-| `ccz_factory_gidney_ekera_2021.yaml` | Gidney & Ekerå 2021; Table 2 CCZ rows + pinned RSA-2048 physical qubits (M), megaqubit-days, wall-clock days |
+| `ccz_factory_gidney_ekera_2021.yaml` | Gidney & Ekerå 2021; consolidated `paper_table2_rsa2048_reference_rows` (CCZ count, M qubits, megaqubit-days, wall-clock, layout_descriptor) |
 | `t_factory_fallback_gidney_ekera_2021.yaml` | Same; Figure 1 caption — T factory when CCZ budget exceeded |

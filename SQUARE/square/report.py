@@ -16,7 +16,7 @@ from square.layout_optimization import build_layout_distance_candidates, summari
 from square.qec_distance_heuristic import suggest_surface_code_distance_union_bound
 from square.schedule_heuristic import build_parallel_depth_schedule_v1, infer_reaction_limited_from_scenario
 
-_REPORT_CONTRACT_VERSION = 2
+_REPORT_CONTRACT_VERSION = 4
 
 _HEADER_KEYS = frozenset(
     {
@@ -38,6 +38,9 @@ _FORMULA_METRICS: tuple[tuple[str, str], ...] = (
 
 _PINNED_SUFFIX_RE = re.compile(r"_n_(\d+)$")
 _CCZ_ROW_RE = re.compile(r"_(\d+)_ccz\b")
+
+_TABLE1_PINS_KEY = "paper_table1_pins_by_modulus_bit_length"
+_TABLE2_RSA2048_ROWS_KEY = "paper_table2_rsa2048_reference_rows"
 
 
 def _is_parameter_entry(obj: Any) -> bool:
@@ -85,13 +88,74 @@ def _pinned_algorithm_entries_for_n(algorithm: Mapping[str, Any], n: int) -> dic
     return out
 
 
-def _find_ccz_factory_parameter_key(magic: Mapping[str, Any], ccz: int) -> str | None:
-    for key, val in magic.items():
-        if not str(key).startswith("ccz_factory_count"):
+def _table1_pin_row(algo: Mapping[str, Any], n: int) -> dict[str, Any] | None:
+    """Return the Table 1 pin sub-map for modulus bit length ``n`` when present."""
+    entry = algo.get(_TABLE1_PINS_KEY)
+    if not isinstance(entry, dict):
+        return None
+    raw_val = entry.get("value")
+    if not isinstance(raw_val, dict):
+        return None
+    sub = raw_val.get(str(int(n)))
+    return sub if isinstance(sub, dict) else None
+
+
+def _table2_rsa2048_row_for_ccz(magic: Mapping[str, Any], ccz: int) -> dict[str, Any] | None:
+    """Match a Table 2 reference row by ``ccz_factories`` (RSA-2048 consolidated block)."""
+    entry = magic.get(_TABLE2_RSA2048_ROWS_KEY)
+    if not isinstance(entry, dict):
+        return None
+    rows = entry.get("value")
+    if not isinstance(rows, list):
+        return None
+    target = int(ccz)
+    for row in rows:
+        if not isinstance(row, dict):
             continue
-        if isinstance(val, dict) and val.get("value") == ccz:
-            return str(key)
+        raw = row.get("ccz_factories")
+        try:
+            if int(raw) == target:
+                return row
+        except (TypeError, ValueError):
+            continue
     return None
+
+
+def _synthetic_pinned_from_table1(algo: Mapping[str, Any], n: int) -> dict[str, Any]:
+    """
+    Rebuild legacy-style pinned parameter keys from :pyattr:`_TABLE1_PINS_KEY` for ``algorithm_metrics``.
+    """
+    parent = algo.get(_TABLE1_PINS_KEY)
+    sub = _table1_pin_row(algo, n)
+    if not isinstance(parent, dict) or sub is None:
+        return {}
+    base = {
+        "confidence": parent.get("confidence"),
+        "source": parent.get("source"),
+        "date": parent.get("date"),
+        "section": parent.get("section"),
+        "layer": "algorithm",
+        "notes": f"Resolved from {_TABLE1_PINS_KEY} for n={n}.",
+    }
+    out: dict[str, Any] = {}
+    if "toffoli_plus_t_halves_billions" in sub:
+        out[f"toffoli_plus_t_halves_count_billions_n_{n}"] = {
+            **base,
+            "value": sub["toffoli_plus_t_halves_billions"],
+            "unit": "billions_of_toffoli_plus_t_halves",
+        }
+    if "minimum_spacetime_volume_megaqubit_days" in sub:
+        out[f"minimum_spacetime_volume_megaqubitdays_n_{n}"] = {
+            **base,
+            "value": sub["minimum_spacetime_volume_megaqubit_days"],
+            "unit": "megaqubit_days",
+        }
+    return out
+
+
+def _table2_dashboard_row_ref(ccz: int) -> str:
+    """Stable logical pointer into the consolidated Table 2 YAML block."""
+    return f"{_TABLE2_RSA2048_ROWS_KEY}#ccz_factories={int(ccz)}"
 
 
 def _magic_float_by_key(magic: Mapping[str, Any], key: str) -> float | None:
@@ -423,6 +487,9 @@ def build_scenario_report(
         evaluated_skipped.append("exponent_register_qubits_ne_asymptotic")
 
     pinned = _pinned_algorithm_entries_for_n(algo, n) if n is not None else {}
+    if n is not None:
+        for k, v in _synthetic_pinned_from_table1(algo, n).items():
+            pinned.setdefault(k, v)
 
     d_resolved, qec_distance_resolution = _resolve_code_distance_full(
         scenario,
@@ -478,58 +545,57 @@ def build_scenario_report(
     rsa2048_wall_days: float | None = None
     wall_key: str | None = None
     factory_param_key: str | None = None
+    table2_row_layout_descriptor: str | None = None
     if ccz_count is not None:
-        phys_key = f"rsa_2048_reported_physical_qubits_millions_{ccz_count}_ccz"
-        phys_entry = bundle.magic.get(phys_key)
-        if isinstance(phys_entry, dict) and phys_entry.get("value") is not None:
-            try:
-                rsa2048_phys = float(phys_entry["value"])
-            except (TypeError, ValueError):
-                rsa2048_phys = None
-                warnings.append(f"Magic YAML key {phys_key!r} has a non-numeric value.")
+        row_ref = _table2_dashboard_row_ref(ccz_count)
+        phys_key = mega_key = wall_key = row_ref
+        t2_row = _table2_rsa2048_row_for_ccz(bundle.magic, ccz_count)
+        if t2_row is None:
+            warnings.append(
+                f"No row with ccz_factories={ccz_count} in magic YAML {_TABLE2_RSA2048_ROWS_KEY!r}; "
+                "Table 2 pins omitted."
+            )
         else:
-            warnings.append(
-                f"No magic YAML entry {phys_key!r} for inferred CCZ count {ccz_count}; "
-                "dashboard physical qubit headline omitted."
-            )
-
-        mega_key = f"rsa_2048_reported_megaqubit_days_{ccz_count}_ccz"
-        rsa2048_megaqd = _magic_float_by_key(bundle.magic, mega_key)
-        if rsa2048_megaqd is None:
-            warnings.append(
-                f"No magic YAML entry {mega_key!r} for inferred CCZ count {ccz_count}; "
-                "Table 2 megaqubit-days pin omitted."
-            )
-
-        wall_key = f"rsa_2048_reported_wall_clock_days_{ccz_count}_ccz"
-        rsa2048_wall_days = _magic_float_by_key(bundle.magic, wall_key)
-        if rsa2048_wall_days is None:
-            warnings.append(
-                f"No magic YAML entry {wall_key!r} for inferred CCZ count {ccz_count}; "
-                "Table 2 wall-clock days pin omitted."
-            )
-
-        factory_param_key = _find_ccz_factory_parameter_key(bundle.magic, ccz_count)
-        if factory_param_key is None:
-            warnings.append(f"No ccz_factory_count* row in magic YAML matches count {ccz_count}.")
+            ld = t2_row.get("layout_descriptor")
+            table2_row_layout_descriptor = str(ld) if ld is not None else None
+            factory_param_key = table2_row_layout_descriptor
+            try:
+                rsa2048_phys = float(t2_row["physical_qubits_millions"])
+            except (KeyError, TypeError, ValueError):
+                rsa2048_phys = None
+                warnings.append(
+                    f"Table 2 row {row_ref!r} missing or non-numeric physical_qubits_millions."
+                )
+            rsa2048_megaqd = None
+            try:
+                rsa2048_megaqd = float(t2_row["megaqubit_days"])
+            except (KeyError, TypeError, ValueError):
+                warnings.append(f"Table 2 row {row_ref!r} missing or non-numeric megaqubit_days.")
+            rsa2048_wall_days = None
+            try:
+                rsa2048_wall_days = float(t2_row["wall_clock_days"])
+            except (KeyError, TypeError, ValueError):
+                warnings.append(f"Table 2 row {row_ref!r} missing or non-numeric wall_clock_days.")
     elif table2_block is not None:
         warnings.append("Could not parse CCZ factory count from table2_reference_row.value.")
 
     toffoli_b = None
     megaqd = None
     if n is not None:
-        tb = algo.get(f"toffoli_plus_t_halves_count_billions_n_{n}")
-        if isinstance(tb, dict) and tb.get("value") is not None:
-            try:
-                toffoli_b = float(tb["value"])
-            except (TypeError, ValueError):
-                pass
-        mq = algo.get(f"minimum_spacetime_volume_megaqubitdays_n_{n}")
-        if isinstance(mq, dict) and mq.get("value") is not None:
-            try:
-                megaqd = float(mq["value"])
-            except (TypeError, ValueError):
-                pass
+        t1 = _table1_pin_row(algo, n)
+        if t1 is not None:
+            raw_tb = t1.get("toffoli_plus_t_halves_billions")
+            if raw_tb is not None:
+                try:
+                    toffoli_b = float(raw_tb)
+                except (TypeError, ValueError):
+                    pass
+            raw_mq = t1.get("minimum_spacetime_volume_megaqubit_days")
+            if raw_mq is not None:
+                try:
+                    megaqd = float(raw_mq)
+                except (TypeError, ValueError):
+                    pass
 
     t_fallback_recommended = False
     t_transition: int | None = None
@@ -556,6 +622,16 @@ def build_scenario_report(
     if bundle.magic_aux is not None:
         mx_h, mx_p = _split_document(bundle.magic_aux)
         magic_aux_layer = {"header": mx_h, "parameters": mx_p}
+
+    qcvv_layer = None
+    if bundle.qcvv is not None:
+        qv_h, qv_p = _split_document(bundle.qcvv)
+        qcvv_layer = {"document_id": qv_h.get("document_id"), "header": qv_h, "parameters": qv_p}
+
+    qem_layer = None
+    if bundle.qem is not None:
+        qm_h, qm_p = _split_document(bundle.qem)
+        qem_layer = {"document_id": qm_h.get("document_id"), "header": qm_h, "parameters": qm_p}
 
     logical_qubits_val: float | None = None
     abs_lq = evaluated.get("abstract_logical_qubits")
@@ -722,6 +798,8 @@ def build_scenario_report(
             "megaqubit_days_key": mega_key if rsa2048_megaqd is not None else None,
             "wall_clock_days": rsa2048_wall_days,
             "wall_clock_days_key": wall_key if rsa2048_wall_days is not None else None,
+            "source_parameter": _TABLE2_RSA2048_ROWS_KEY,
+            "layout_descriptor": table2_row_layout_descriptor,
             "provenance": "pinned_in_magic_yaml_table2",
         }
 
@@ -754,12 +832,16 @@ def build_scenario_report(
             "magic": _source_header(bundle.magic),
             "algorithm": _source_header(algo),
             "magic_aux": _source_header(bundle.magic_aux) if bundle.magic_aux else None,
+            "qcvv": _source_header(bundle.qcvv) if bundle.qcvv else None,
+            "qem": _source_header(bundle.qem) if bundle.qem else None,
         },
         "layers": {
             "modality": {"document_id": modality_h.get("document_id"), "header": modality_h, "parameters": modality_p},
             "qec": {"document_id": qec_h.get("document_id"), "header": qec_h, "parameters": qec_p},
             "magic": {"document_id": magic_h.get("document_id"), "header": magic_h, "parameters": magic_p},
             "magic_aux": magic_aux_layer,
+            "qcvv": qcvv_layer,
+            "qem": qem_layer,
             "algorithm": {"document_id": algo_h.get("document_id"), "header": algo_h, "parameters": algo_p},
         },
         "algorithm_metrics": {
@@ -785,6 +867,8 @@ def build_scenario_report(
         "dashboard": {
             "ccz_factory_count": ccz_count,
             "ccz_factory_parameter_key": factory_param_key,
+            "table2_pinned_source_parameter": _TABLE2_RSA2048_ROWS_KEY if ccz_count is not None else None,
+            "table2_pinned_row_layout_descriptor": table2_row_layout_descriptor,
             "rsa_2048_reported_physical_qubits_millions_key": phys_key,
             "reported_rsa2048_physical_qubits_millions": rsa2048_phys,
             "rsa_2048_reported_megaqubit_days_key": mega_key,

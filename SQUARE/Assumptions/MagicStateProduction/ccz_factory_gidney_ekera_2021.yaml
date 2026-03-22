@@ -21,124 +21,32 @@ primary_non_clifford_mechanism:
   section: "Table 2"
   layer: magic
 
-ccz_factory_count_distillation_limited_ripple_carry:
-  value: 1
-  unit: "count"
-  confidence: estimated
-  source: "Gidney & Ekerå, Quantum 2021 (Table 2 row: ours 2019, 1 factory)"
-  date: "2021-04-15"
-  section: "Table 2"
-  notes: >-
-    Distillation limited ripple carry; paper reports approx. 16M physical qubits, approx. 6 days,
-    approx. 90 megaqubit-days for this row.
-  layer: magic
-
-ccz_factory_count_reaction_limited_ripple_carry:
-  value: 14
-  unit: "count"
-  confidence: estimated
-  source: "Gidney & Ekerå, Quantum 2021 (Table 2 row: ours 2019, 1 thread)"
-  date: "2021-04-15"
-  section: "Table 2"
-  notes: >-
-    Reaction limited ripple carry; paper reports approx. 19M physical qubits, approx. 0.36 days,
-    approx. 6.6 megaqubit-days for this row.
-  layer: magic
-
-ccz_factory_count_reaction_limited_carry_runways:
-  value: 28
-  unit: "count"
-  confidence: estimated
-  source: "Gidney & Ekerå, Quantum 2021 (Table 2 row: ours 2019, parallel)"
-  date: "2021-04-15"
-  section: "Table 2"
-  notes: >-
-    Reaction limited carry runways; paper reports approx. 20M physical qubits, approx. 0.31 days,
-    approx. 5.9 megaqubit-days for this row.
-  layer: magic
-
-rsa_2048_reported_physical_qubits_millions_1_ccz:
-  value: 16
-  unit: "millions_of_physical_qubits"
+# One structured list replaces flat ccz_factory_count_* and rsa_2048_reported_* triplets.
+paper_table2_rsa2048_reference_rows:
+  value:
+    - ccz_factories: 1
+      physical_qubits_millions: 16
+      megaqubit_days: 90
+      wall_clock_days: 6
+      layout_descriptor: distillation_limited_ripple_carry
+    - ccz_factories: 14
+      physical_qubits_millions: 19
+      megaqubit_days: 6.6
+      wall_clock_days: 0.36
+      layout_descriptor: reaction_limited_ripple_carry
+    - ccz_factories: 28
+      physical_qubits_millions: 20
+      megaqubit_days: 5.9
+      wall_clock_days: 0.31
+      layout_descriptor: reaction_limited_carry_runways
+  unit: "paper_table2_rows"
   confidence: estimated
   source: "Gidney & Ekerå, Quantum 2021 (Table 2)"
   date: "2021-04-15"
   section: "Table 2"
-  notes: End-to-end estimate including QEC and layout; for regression against the paper.
-  layer: magic
-
-rsa_2048_reported_physical_qubits_millions_14_ccz:
-  value: 19
-  unit: "millions_of_physical_qubits"
-  confidence: estimated
-  source: "Gidney & Ekerå, Quantum 2021 (Table 2)"
-  date: "2021-04-15"
-  section: "Table 2"
-  layer: magic
-
-rsa_2048_reported_physical_qubits_millions_28_ccz:
-  value: 20
-  unit: "millions_of_physical_qubits"
-  confidence: estimated
-  source: "Gidney & Ekerå, Quantum 2021 (Table 2)"
-  date: "2021-04-15"
-  section: "Table 2"
-  layer: magic
-
-# Table 2 headline time / spacetime columns for RSA n=2048 (same rows as physical qubit pins above).
-rsa_2048_reported_megaqubit_days_1_ccz:
-  value: 90
-  unit: "megaqubit_days"
-  confidence: estimated
-  source: "Gidney & Ekerå, Quantum 2021 (Table 2 row: ours 2019, 1 factory)"
-  date: "2021-04-15"
-  section: "Table 2"
-  notes: Distillation-limited ripple-carry row; pairs with rsa_2048_reported_physical_qubits_millions_1_ccz.
-  layer: magic
-
-rsa_2048_reported_megaqubit_days_14_ccz:
-  value: 6.6
-  unit: "megaqubit_days"
-  confidence: estimated
-  source: "Gidney & Ekerå, Quantum 2021 (Table 2 row: ours 2019, 1 thread)"
-  date: "2021-04-15"
-  section: "Table 2"
-  layer: magic
-
-rsa_2048_reported_megaqubit_days_28_ccz:
-  value: 5.9
-  unit: "megaqubit_days"
-  confidence: estimated
-  source: "Gidney & Ekerå, Quantum 2021 (Table 2 row: ours 2019, parallel)"
-  date: "2021-04-15"
-  section: "Table 2"
-  layer: magic
-
-rsa_2048_reported_wall_clock_days_1_ccz:
-  value: 6
-  unit: "days"
-  confidence: estimated
-  source: "Gidney & Ekerå, Quantum 2021 (Table 2 row: ours 2019, 1 factory)"
-  date: "2021-04-15"
-  section: "Table 2"
-  layer: magic
-
-rsa_2048_reported_wall_clock_days_14_ccz:
-  value: 0.36
-  unit: "days"
-  confidence: estimated
-  source: "Gidney & Ekerå, Quantum 2021 (Table 2 row: ours 2019, 1 thread)"
-  date: "2021-04-15"
-  section: "Table 2"
-  layer: magic
-
-rsa_2048_reported_wall_clock_days_28_ccz:
-  value: 0.31
-  unit: "days"
-  confidence: estimated
-  source: "Gidney & Ekerå, Quantum 2021 (Table 2 row: ours 2019, parallel)"
-  date: "2021-04-15"
-  section: "Table 2"
+  notes: >-
+    Each row matches one “ours 2019” configuration. layout_descriptor steers simple schedule inference
+    (distillation-limited vs reaction-limited). Reports match rows by ccz_factories from scenario table2_reference_row.
   layer: magic
 
 # Optional: explicit factory footprint when not using derived_non_data_overhead from Table 2 total minus data plane.
@@ -151,5 +59,5 @@ physical_qubits_per_ccz_factory_approximate:
   section: "SQuaRE layout proxy"
   notes: >-
     Report still prefers derived_non_data_overhead_physical_qubits (pinned total minus naive data plane) when
-    rsa_2048_reported_physical_qubits_millions_*_ccz is present.
+    paper_table2_rsa2048_reference_rows matches the scenario CCZ count.
   layer: magic
