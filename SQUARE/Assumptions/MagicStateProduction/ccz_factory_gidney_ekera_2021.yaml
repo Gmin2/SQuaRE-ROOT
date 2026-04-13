@@ -1,0 +1,63 @@
+# CCZ-factory-centric non-Clifford supply assumptions for Table 2 “(ours) 2019” rows (RSA n=2048).
+document_id: ccz_factory_gidney_ekera_2021
+schema_version: 1
+primary_reference: >-
+  Gidney, C. & Ekerå, M. How to factor 2048 bit RSA integers in 8 hours using 20 million noisy qubits.
+  Quantum 5, 433 (2021).
+doi: "10.22331/q-2021-04-15-433"
+arxiv: "1905.09749"
+date_issued: "2021-04-15"
+notes: >
+  Table 2 lists three “ours” configurations differing by CCZ factory count and whether carry is
+  distillation- or reaction-limited. Use the matching modality + layout scenario; counts are for
+  factoring 2048-bit RSA under the paper’s full pipeline.
+
+primary_non_clifford_mechanism:
+  value: "ccz_state_injection_and_lattice_surgery"
+  unit: "descriptor"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Table 2; distillation strategy column)"
+  date: "2021-04-15"
+  section: "Table 2"
+  layer: magic
+
+# One structured list replaces flat ccz_factory_count_* and rsa_2048_reported_* triplets.
+paper_table2_rsa2048_reference_rows:
+  value:
+    - ccz_factories: 1
+      physical_qubits_millions: 16
+      megaqubit_days: 90
+      wall_clock_days: 6
+      layout_descriptor: distillation_limited_ripple_carry
+    - ccz_factories: 14
+      physical_qubits_millions: 19
+      megaqubit_days: 6.6
+      wall_clock_days: 0.36
+      layout_descriptor: reaction_limited_ripple_carry
+    - ccz_factories: 28
+      physical_qubits_millions: 20
+      megaqubit_days: 5.9
+      wall_clock_days: 0.31
+      layout_descriptor: reaction_limited_carry_runways
+  unit: "paper_table2_rows"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Table 2)"
+  date: "2021-04-15"
+  section: "Table 2"
+  notes: >-
+    Each row matches one “ours 2019” configuration. layout_descriptor steers simple schedule inference
+    (distillation-limited vs reaction-limited). Reports match rows by ccz_factories from scenario table2_reference_row.
+  layer: magic
+
+# Optional: explicit factory footprint when not using derived_non_data_overhead from Table 2 total minus data plane.
+physical_qubits_per_ccz_factory_approximate:
+  value: 10000
+  unit: "physical_qubits"
+  confidence: speculative
+  source: "Order-of-magnitude placeholder for CCZ factory + local routing; replace with layout-extracted value when available."
+  date: "2025-03-20"
+  section: "SQuaRE layout proxy"
+  notes: >-
+    Report still prefers derived_non_data_overhead_physical_qubits (pinned total minus naive data plane) when
+    paper_table2_rsa2048_reference_rows matches the scenario CCZ count.
+  layer: magic

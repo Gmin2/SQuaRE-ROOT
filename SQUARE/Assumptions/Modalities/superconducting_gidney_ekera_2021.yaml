@@ -1,0 +1,57 @@
+# Physical-platform assumptions matching Table 2 “(ours) 2019” rows in Gidney & Ekerå 2021.
+document_id: superconducting_gidney_ekera_2021
+schema_version: 1
+primary_reference: >-
+  Gidney, C. & Ekerå, M. How to factor 2048 bit RSA integers in 8 hours using 20 million noisy qubits.
+  Quantum 5, 433 (2021).
+doi: "10.22331/q-2021-04-15-433"
+arxiv: "1905.09749"
+date_issued: "2021-04-15"
+notes: >
+  Targets large-scale superconducting with a planar grid and nearest-neighbor coupling, as stated
+  in the abstract and Section 1. Values below are the headline physical assumptions used for Table 2
+  comparison rows labeled “(ours) 2019”.
+
+characteristic_physical_gate_error_rate:
+  value: 0.001
+  unit: "error_probability_per_gate"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Table 2, historical comparison)"
+  date: "2021-04-15"
+  section: "Table 2"
+  notes: Reported as 0.1% in the table; authors caution that halving/doubling this moves qubit counts by >10%.
+
+surface_code_cycle_time:
+  value: 1.0
+  unit: "microseconds"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Table 2)"
+  date: "2021-04-15"
+  section: "Table 2"
+
+classical_control_reaction_time:
+  value: 10.0
+  unit: "microseconds"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Table 2)"
+  date: "2021-04-15"
+  section: "Table 2"
+  notes: Drives reaction-limited layouts; compare to 0.1 µs in Fowler et al. 2012 row of same table.
+
+connectivity_model:
+  value: "planar_nearest_neighbor"
+  unit: "descriptor"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (abstract; Table 2)"
+  date: "2021-04-15"
+  section: "Abstract; Table 2"
+  layer: physical
+
+platform_class:
+  value: "superconducting_large_scale_planar"
+  unit: "descriptor"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (abstract)"
+  date: "2021-04-15"
+  section: "Abstract"
+  layer: physical
