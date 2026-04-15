@@ -1,0 +1,93 @@
+"""CLI: Monte Carlo study — sample θ, run forward model, write CSV + quantile JSON."""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+from square.loader import find_square_root, load_scenario_bundle
+from square.mc import (
+    load_monte_carlo_study_spec,
+    run_monte_carlo_study,
+    write_mc_samples_csv,
+    write_mc_summary_json,
+)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="square-mc",
+        description="Run a Monte Carlo study (prior predictive): sample θ from study YAML, evaluate reports.",
+    )
+    parser.add_argument(
+        "study",
+        type=str,
+        help="Path to Monte Carlo study YAML (e.g. Configs/monte_carlo_study_ecdlp_example.yaml).",
+    )
+    parser.add_argument(
+        "--samples",
+        type=int,
+        default=100,
+        metavar="N",
+        help="Number of Monte Carlo draws (default: 100).",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="RNG seed for reproducibility (default: 42).",
+    )
+    parser.add_argument(
+        "--output-csv",
+        type=Path,
+        default=None,
+        help="Write per-sample rows to this CSV path (default: mc_samples_<study_id>.csv in cwd).",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="Write quantile summary JSON (default: mc_summary_<study_id>.json in cwd).",
+    )
+    parser.add_argument(
+        "--root",
+        type=Path,
+        default=None,
+        help="SQuaRE project root (directory with Assumptions/Schemas.yaml); auto-detected if omitted.",
+    )
+    args = parser.parse_args(argv if argv is not None else sys.argv[1:])
+
+    root = args.root.resolve() if args.root is not None else find_square_root(Path(__file__))
+
+    spec = load_monte_carlo_study_spec(args.study, root=root)
+    scenario_path = root / spec.base_scenario
+    if not scenario_path.is_file():
+        scenario_path = Path(spec.base_scenario).resolve()
+    if not scenario_path.is_file():
+        print(f"error: base scenario not found: {spec.base_scenario}", file=sys.stderr)
+        return 1
+
+    bundle = load_scenario_bundle(scenario_path, root=root)
+
+    result = run_monte_carlo_study(
+        spec,
+        bundle,
+        n_samples=args.samples,
+        seed=args.seed,
+        include_full_report=False,
+    )
+
+    out_csv = args.output_csv
+    if out_csv is None:
+        out_csv = Path(f"mc_samples_{spec.study_id}.csv")
+    out_json = args.summary_json
+    if out_json is None:
+        out_json = Path(f"mc_summary_{spec.study_id}.json")
+
+    write_mc_samples_csv(out_csv, result.rows)
+    write_mc_summary_json(out_json, result.summary)
+
+    print(f"Wrote {len(result.rows)} rows -> {out_csv.resolve()}")
+    print(f"Wrote quantile summary -> {out_json.resolve()}")
+    return 0

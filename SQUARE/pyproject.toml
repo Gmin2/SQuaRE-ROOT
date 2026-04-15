@@ -12,6 +12,7 @@ dependencies = ["pyyaml>=6"]
 
 [project.scripts]
 square-report = "square.cli:main"
+square-mc = "square.cli_mc:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]
