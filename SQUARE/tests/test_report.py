@@ -102,6 +102,44 @@ def test_build_report_rsa2048_parallel() -> None:
     json.dumps(report)
 
 
+def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
+    root = find_square_root()
+    scenario = root / "Configs" / "ecdlp_secp256k1_babbush_2026_low_toffoli.yaml"
+    bundle = load_scenario_bundle(scenario, root=root)
+    report = build_scenario_report(bundle)
+
+    assert report["report_contract_version"] == 4
+    assert report["algorithm_metrics"]["n"] is None
+    ecdlp = report["algorithm_metrics"]["ecdlp"]
+    assert ecdlp["active"] is True
+    assert ecdlp["variant"] == "low_toffoli_variant"
+    assert ecdlp["logical_qubits_upper_bound"] == 1450
+    assert ecdlp["toffoli_gates_upper_bound"] == 70_000_000
+    assert ecdlp["ecdlp_measurement_depth_layers_per_toffoli_gate"] == 1.0
+    assert ecdlp["paper_headline_physical_qubits_upper_bound_narrative"] == 500_000
+
+    ev = report["algorithm_metrics"]["evaluated"]
+    assert ev["abstract_logical_qubits"]["value"] == 1450
+    assert ev["abstract_logical_qubits"]["provenance"] == "ecdlp_envelope_fixed_problem"
+    assert ev["abstract_measurement_depth_layers"]["value"] == 70_000_000.0
+
+    dash = report["dashboard"]
+    assert dash.get("ecdlp_active") is True
+    assert dash["ecdlp_variant"] == "low_toffoli_variant"
+    assert dash["ecdlp_toffoli_gates_upper_bound"] == 70_000_000
+    assert dash["ecdlp_paper_headline_physical_qubits_upper_bound"] == 500_000
+
+    assert report["qec_distance_resolution"]["mode"] == "heuristic_union_bound"
+    assert report["qec_distance_resolution"]["distance_d"] == 21
+    timing = report["timing"]["naive_serial_from_measurement_depth"]
+    assert timing is not None
+    assert timing["source_parameters"]["depth"] == "ecdlp_logical_resource_envelopes_secp256k1_proxy"
+    expected_days = 70_000_000.0 * 1.0 / 1e6 / 86400.0
+    assert timing["serial_time_days"] == pytest.approx(expected_days)
+
+    json.dumps(report)
+
+
 def test_build_report_surfaces_qcvv_qem_layers_when_loaded() -> None:
     root = find_square_root()
     scen = root / "Configs" / "_test_qcvv_qem_report.yaml"

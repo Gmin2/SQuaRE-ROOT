@@ -78,3 +78,18 @@ def test_load_optional_qcvv_and_qem_paths() -> None:
         assert bundle.qem["document_id"] == "qem_identity_no_overhead"
     finally:
         scen.unlink(missing_ok=True)
+
+
+def test_load_ecdlp_secp256k1_babbush_2026_low_toffoli() -> None:
+    root = find_square_root()
+    scenario = root / "Configs" / "ecdlp_secp256k1_babbush_2026_low_toffoli.yaml"
+    assert scenario.is_file(), f"Missing scenario file: {scenario}"
+
+    bundle = load_scenario_bundle(scenario, root=root)
+
+    assert bundle.scenario.get("scenario") == "ecdlp_secp256k1_babbush_2026_low_toffoli"
+    assert bundle.modality["document_id"] == "superconducting_babbush_et_al_2026"
+    assert bundle.algorithm["document_id"] == "ecdlp_secp256k1_babbush_et_al_2026"
+    env = bundle.algorithm["ecdlp_logical_resource_envelopes_secp256k1"]["value"]["low_toffoli_variant"]
+    assert env["logical_qubits_upper_bound"] == 1450
+    assert env["toffoli_gates_upper_bound"] == 70_000_000

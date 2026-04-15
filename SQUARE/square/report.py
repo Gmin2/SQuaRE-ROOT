@@ -42,6 +42,9 @@ _CCZ_ROW_RE = re.compile(r"_(\d+)_ccz\b")
 _TABLE1_PINS_KEY = "paper_table1_pins_by_modulus_bit_length"
 _TABLE2_RSA2048_ROWS_KEY = "paper_table2_rsa2048_reference_rows"
 
+_ECDLP_DOCUMENT_IDS = frozenset({"ecdlp_secp256k1_babbush_et_al_2026"})
+_ECDLP_ENVELOPE_KEY = "ecdlp_logical_resource_envelopes_secp256k1"
+
 
 def _is_parameter_entry(obj: Any) -> bool:
     return isinstance(obj, dict) and "value" in obj and "unit" in obj
@@ -175,6 +178,159 @@ def _engine_version() -> str:
         return version("square")
     except Exception:
         return "0.0.1"
+
+
+def _resolve_ecdlp_variant(scenario: Mapping[str, Any], warnings: list[str]) -> str:
+    """Return scenario ``ecdlp_variant`` (default: low_toffoli_variant)."""
+    tgt = scenario.get("target") if isinstance(scenario.get("target"), dict) else {}
+    raw = tgt.get("ecdlp_variant")
+    if raw is None:
+        raw = scenario.get("ecdlp_variant")
+    if raw is None:
+        return "low_toffoli_variant"
+    s = str(raw).strip()
+    allowed = frozenset({"low_logical_qubit_variant", "low_toffoli_variant"})
+    if s in allowed:
+        return s
+    warnings.append(f"Unknown ecdlp_variant {raw!r}; using low_toffoli_variant.")
+    return "low_toffoli_variant"
+
+
+def _ecdlp_depth_multiplier(algo: Mapping[str, Any]) -> float:
+    """Layers per Toffoli for ``abstract_measurement_depth_layers`` (II.1)."""
+    e = algo.get("ecdlp_measurement_depth_layers_per_toffoli_gate")
+    if isinstance(e, dict) and e.get("value") is not None:
+        try:
+            return float(e["value"])
+        except (TypeError, ValueError):
+            pass
+    return 1.0
+
+
+def _ecdlp_headline_physical_upper_bound_narrative(algo: Mapping[str, Any]) -> float | None:
+    e = algo.get("headline_superconducting_physical_qubits_upper_bound")
+    if isinstance(e, dict) and e.get("value") is not None:
+        try:
+            return float(e["value"])
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _build_ecdlp_report_context(
+    algo: Mapping[str, Any],
+    scenario: Mapping[str, Any],
+    warnings: list[str],
+) -> dict[str, Any] | None:
+    """
+    Fixed-problem ECDLP profiles: fill ``evaluated`` logical qubits + depth proxy from cited envelopes.
+
+    Depth proxy (II.1): ``abstract_measurement_depth_layers`` =
+    ``toffoli_gates_upper_bound`` × ``ecdlp_measurement_depth_layers_per_toffoli_gate``.
+    """
+    if algo.get("document_id") not in _ECDLP_DOCUMENT_IDS:
+        return None
+
+    variant = _resolve_ecdlp_variant(scenario, warnings)
+    env_parent = algo.get(_ECDLP_ENVELOPE_KEY)
+    if not isinstance(env_parent, dict):
+        warnings.append(f"ECDLP algorithm missing {_ECDLP_ENVELOPE_KEY!r}; skipping ECDLP evaluation.")
+        return None
+    env_val = env_parent.get("value")
+    if not isinstance(env_val, dict) or variant not in env_val:
+        warnings.append(f"ECDLP envelope missing variant {variant!r}.")
+        return None
+    row = env_val.get(variant)
+    if not isinstance(row, dict):
+        warnings.append("ECDLP envelope variant row is not a mapping.")
+        return None
+    try:
+        lq = float(row["logical_qubits_upper_bound"])
+        tof = float(row["toffoli_gates_upper_bound"])
+    except (KeyError, TypeError, ValueError) as exc:
+        warnings.append(f"ECDLP envelope numeric fields invalid: {exc}")
+        return None
+
+    mult = _ecdlp_depth_multiplier(algo)
+    depth_layers = tof * mult
+    prov = "ecdlp_envelope_fixed_problem"
+
+    evaluated: dict[str, Any] = {
+        "abstract_logical_qubits": {
+            "value": lq,
+            "source_parameter": _ECDLP_ENVELOPE_KEY,
+            "provenance": prov,
+        },
+        "abstract_measurement_depth_layers": {
+            "value": depth_layers,
+            "source_parameter": _ECDLP_ENVELOPE_KEY,
+            "provenance": prov,
+            "depth_proxy": (
+                "toffoli_gates_upper_bound × ecdlp_measurement_depth_layers_per_toffoli_gate "
+                f"({tof} × {mult})"
+            ),
+        },
+    }
+
+    skipped = [src_key for src_key, _ in _FORMULA_METRICS]
+    skipped.append("exponent_register_qubits_ne_asymptotic")
+
+    ecdlp_block: dict[str, Any] = {
+        "active": True,
+        "variant": variant,
+        "logical_qubits_upper_bound": lq,
+        "toffoli_gates_upper_bound": tof,
+        "ecdlp_measurement_depth_layers_per_toffoli_gate": mult,
+        "abstract_measurement_depth_layers_proxy": depth_layers,
+        "depth_proxy_rule": "toffoli_upper_bound_times_layers_per_toffoli_parameter",
+    }
+    headline_pb = _ecdlp_headline_physical_upper_bound_narrative(algo)
+    if headline_pb is not None:
+        ecdlp_block["paper_headline_physical_qubits_upper_bound_narrative"] = headline_pb
+
+    warnings.append(
+        "ECDLP mode: abstract_measurement_depth_layers is a Toffoli-derived proxy for heuristics, "
+        "not a compiled layer schedule from the undisclosed circuits."
+    )
+
+    return {
+        "evaluated": evaluated,
+        "evaluated_skipped": skipped,
+        "ecdlp_block": ecdlp_block,
+    }
+
+
+def _algorithm_metrics_block(
+    *,
+    n: int | None,
+    evaluated: Mapping[str, Any],
+    evaluated_skipped: list[str],
+    pinned: Mapping[str, Any],
+    ecdlp_block: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Assemble ``algorithm_metrics``; include ``ecdlp`` when in fixed-problem ECDLP mode."""
+    out: dict[str, Any] = {
+        "n": n,
+        "evaluated": dict(evaluated),
+        "evaluated_skipped": list(evaluated_skipped),
+        "pinned_in_algorithm_yaml": dict(pinned),
+    }
+    if ecdlp_block is not None:
+        out["ecdlp"] = ecdlp_block
+    return out
+
+
+def _ecdlp_dashboard_extras(ecdlp_block: dict[str, Any] | None) -> dict[str, Any]:
+    if ecdlp_block is None:
+        return {}
+    return {
+        "ecdlp_active": True,
+        "ecdlp_variant": ecdlp_block.get("variant"),
+        "ecdlp_toffoli_gates_upper_bound": ecdlp_block.get("toffoli_gates_upper_bound"),
+        "ecdlp_paper_headline_physical_qubits_upper_bound": ecdlp_block.get(
+            "paper_headline_physical_qubits_upper_bound_narrative"
+        ),
+    }
 
 
 def _parse_code_distance(
@@ -438,53 +594,62 @@ def build_scenario_report(
     warnings: list[str] = []
     scenario = bundle.scenario
     target = scenario.get("target") if isinstance(scenario.get("target"), dict) else {}
-    n_raw = modulus_bits_override if modulus_bits_override is not None else target.get("modulus_bit_length")
-    n: int | None
-    if n_raw is None:
-        n = None
-        warnings.append("No modulus_bit_length in scenario target (and no override); formula metrics skipped.")
-    else:
-        try:
-            n = int(n_raw)
-        except (TypeError, ValueError):
-            n = None
-            warnings.append("modulus_bit_length is not an integer; formula metrics skipped.")
-        if n is not None and n <= 0:
-            n = None
-            warnings.append("modulus_bit_length must be positive; formula metrics skipped.")
-
     algo = bundle.algorithm
+
+    ecdlp_ctx = _build_ecdlp_report_context(algo, scenario, warnings)
+    ecdlp_block_for_metrics: dict[str, Any] | None = None
+
     evaluated: dict[str, Any] = {}
     evaluated_skipped: list[str] = []
+    n: int | None = None
 
-    if n is not None:
-        for src_key, out_key in _FORMULA_METRICS:
-            entry = algo.get(src_key)
-            if not isinstance(entry, dict):
-                evaluated_skipped.append(src_key)
-                continue
-            raw = entry.get("value")
-            if not isinstance(raw, str):
-                evaluated_skipped.append(src_key)
-                continue
-            if "O(" in raw or "O(1)" in raw:
-                evaluated_skipped.append(src_key)
-                continue
+    if ecdlp_ctx is not None:
+        evaluated = ecdlp_ctx["evaluated"]
+        evaluated_skipped = ecdlp_ctx["evaluated_skipped"]
+        ecdlp_block_for_metrics = ecdlp_ctx["ecdlp_block"]
+    else:
+        n_raw = modulus_bits_override if modulus_bits_override is not None else target.get("modulus_bit_length")
+        if n_raw is None:
+            n = None
+            warnings.append("No modulus_bit_length in scenario target (and no override); formula metrics skipped.")
+        else:
             try:
-                value = eval_numeric_formula(raw, float(n))
-            except (FormulaEvalError, ZeroDivisionError, OverflowError) as exc:
-                warnings.append(f"Could not evaluate {src_key!r}: {exc}")
-                evaluated_skipped.append(src_key)
-                continue
-            evaluated[out_key] = {
-                "value": value,
-                "source_parameter": src_key,
-                "provenance": "computed_from_yaml_formula",
-            }
+                n = int(n_raw)
+            except (TypeError, ValueError):
+                n = None
+                warnings.append("modulus_bit_length is not an integer; formula metrics skipped.")
+            if n is not None and n <= 0:
+                n = None
+                warnings.append("modulus_bit_length must be positive; formula metrics skipped.")
 
-    exp = algo.get("exponent_register_qubits_ne_asymptotic")
-    if isinstance(exp, dict) and isinstance(exp.get("value"), str) and "O(" in str(exp["value"]):
-        evaluated_skipped.append("exponent_register_qubits_ne_asymptotic")
+        if n is not None:
+            for src_key, out_key in _FORMULA_METRICS:
+                entry = algo.get(src_key)
+                if not isinstance(entry, dict):
+                    evaluated_skipped.append(src_key)
+                    continue
+                raw = entry.get("value")
+                if not isinstance(raw, str):
+                    evaluated_skipped.append(src_key)
+                    continue
+                if "O(" in raw or "O(1)" in raw:
+                    evaluated_skipped.append(src_key)
+                    continue
+                try:
+                    value = eval_numeric_formula(raw, float(n))
+                except (FormulaEvalError, ZeroDivisionError, OverflowError) as exc:
+                    warnings.append(f"Could not evaluate {src_key!r}: {exc}")
+                    evaluated_skipped.append(src_key)
+                    continue
+                evaluated[out_key] = {
+                    "value": value,
+                    "source_parameter": src_key,
+                    "provenance": "computed_from_yaml_formula",
+                }
+
+        exp = algo.get("exponent_register_qubits_ne_asymptotic")
+        if isinstance(exp, dict) and isinstance(exp.get("value"), str) and "O(" in str(exp["value"]):
+            evaluated_skipped.append("exponent_register_qubits_ne_asymptotic")
 
     pinned = _pinned_algorithm_entries_for_n(algo, n) if n is not None else {}
     if n is not None:
@@ -706,6 +871,11 @@ def build_scenario_report(
             if cycle_us is not None:
                 serial_us = depth_val * cycle_us
                 serial_days = serial_us / (1e6 * 86400.0)
+                depth_src = (
+                    "ecdlp_logical_resource_envelopes_secp256k1_proxy"
+                    if ecdlp_block_for_metrics is not None
+                    else "abstract_measurement_depth_formula"
+                )
                 naive_serial_timing = {
                     "abstract_measurement_depth_layers": depth_val,
                     "surface_code_cycle_time_microseconds": cycle_us,
@@ -713,7 +883,7 @@ def build_scenario_report(
                     "serial_time_days": serial_days,
                     "provenance": "computed_from_measurement_depth_times_surface_cycle",
                     "source_parameters": {
-                        "depth": "abstract_measurement_depth_formula",
+                        "depth": depth_src,
                         "cycle": "surface_code_cycle_time",
                     },
                 }
@@ -818,6 +988,14 @@ def build_scenario_report(
         "patch_formula_status": qec_patch_status,
     }
 
+    algo_metrics = _algorithm_metrics_block(
+        n=n,
+        evaluated=evaluated,
+        evaluated_skipped=evaluated_skipped,
+        pinned=pinned,
+        ecdlp_block=ecdlp_block_for_metrics,
+    )
+
     report: dict[str, Any] = {
         "report_contract_version": _REPORT_CONTRACT_VERSION,
         "engine": {"name": "square", "version": _engine_version()},
@@ -844,12 +1022,7 @@ def build_scenario_report(
             "qem": qem_layer,
             "algorithm": {"document_id": algo_h.get("document_id"), "header": algo_h, "parameters": algo_p},
         },
-        "algorithm_metrics": {
-            "n": n,
-            "evaluated": evaluated,
-            "evaluated_skipped": evaluated_skipped,
-            "pinned_in_algorithm_yaml": pinned,
-        },
+        "algorithm_metrics": algo_metrics,
         "qec_overhead": {
             "logical_qubit_patch_physical_qubit_count": {
                 "formula": patch_formula,
@@ -899,6 +1072,7 @@ def build_scenario_report(
             )
             if schedule_calibration
             else None,
+            **_ecdlp_dashboard_extras(ecdlp_block_for_metrics),
         },
     }
 
@@ -923,7 +1097,15 @@ def report_to_markdown(report: Mapping[str, Any]) -> str:
 
     tgt = report.get("target", {})
     if tgt:
-        lines.append(f"**Target** modulus bits **{tgt.get('modulus_bit_length')}**, problem `{tgt.get('problem')}`\n")
+        if report.get("algorithm_metrics", {}).get("ecdlp"):
+            lines.append(
+                f"**Target** ECDLP `{tgt.get('problem')}` · variant `{tgt.get('ecdlp_variant')}` "
+                f"(curve bits {tgt.get('curve_bit_length')})\n"
+            )
+        else:
+            lines.append(
+                f"**Target** modulus bits **{tgt.get('modulus_bit_length')}**, problem `{tgt.get('problem')}`\n"
+            )
 
     dash = report.get("dashboard", {})
     lines.append("## Headlines\n")

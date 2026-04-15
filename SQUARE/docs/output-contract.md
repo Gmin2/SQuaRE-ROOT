@@ -70,10 +70,11 @@ Each of `modality`, `qec`, `magic`, `algorithm` contains:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `n` | `number` | Modulus bit length used for evaluation (from `target.modulus_bit_length` or override). |
-| `evaluated` | `object` | Per-metric objects when the YAML formula is a **closed-form expression in `n`** using `+ - * / // % **` and `log2(...)`. Each value is `{ "value": number, "source_parameter": string, "provenance": "computed_from_yaml_formula" }`. |
+| `n` | `number \| null` | Modulus bit length for RSA-style scenarios (`target.modulus_bit_length` or override). **`null`** for fixed-problem ECDLP profiles (algorithm `document_id` in the ECDLP set), which do not use `n`. |
+| `evaluated` | `object` | Per-metric objects when the YAML formula is a **closed-form expression in `n`** using `+ - * / // % **` and `log2(...)`. Each value is `{ "value": number, "source_parameter": string, "provenance": "computed_from_yaml_formula" }`. For ECDLP, entries use `provenance: "ecdlp_envelope_fixed_problem"` and populate `abstract_logical_qubits` and `abstract_measurement_depth_layers` (Toffoli-derived depth proxy). |
 | `evaluated_skipped` | `array` | Parameter keys not evaluated (e.g. strings containing `O(1)`). |
 | `pinned_in_algorithm_yaml` | `object` | Map of parameter key → entry for paper-pinned values at specific `n`. May include synthetic keys (e.g. `toffoli_plus_t_halves_count_billions_n_<n>`) resolved from a consolidated `paper_table1_pins_by_modulus_bit_length` block when present. |
+| `ecdlp` | `object \| omitted` | Present when the algorithm is a fixed-problem ECDLP document. Includes `variant`, `logical_qubits_upper_bound`, `toffoli_gates_upper_bound`, `ecdlp_measurement_depth_layers_per_toffoli_gate`, `abstract_measurement_depth_layers_proxy`, `depth_proxy_rule`, and optional `paper_headline_physical_qubits_upper_bound_narrative`. |
 
 ## `dashboard`
 
@@ -105,6 +106,10 @@ Headline fields (all optional / nullable):
 | `factory_footprint_physical_qubits_from_yaml` | `ccz_factory_count × physical_qubits_per_ccz_factory_approximate` when the magic YAML parameter is present. |
 | `schedule_model_v1_wall_clock_days` | Heuristic parallel-depth schedule (see `timing.schedule_model_v1`). |
 | `schedule_calibration_ratio_table2_over_model_v1` | Pinned Table 2 wall-clock divided by `schedule_model_v1` days when both exist (highlights model mismatch). |
+| `ecdlp_active` | `true` when the scenario uses an ECDLP algorithm profile; otherwise omitted. |
+| `ecdlp_variant` | Named envelope key (e.g. `low_toffoli_variant`) when ECDLP mode is active. |
+| `ecdlp_toffoli_gates_upper_bound` | Upper bound from the algorithm YAML envelope when ECDLP mode is active. |
+| `ecdlp_paper_headline_physical_qubits_upper_bound` | Narrative physical-qubit headline from the algorithm YAML when present. |
 
 ## `qec_distance_resolution`
 
