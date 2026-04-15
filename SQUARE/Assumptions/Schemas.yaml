@@ -22,7 +22,8 @@ enums:
       - system
       - algorithm
 
-# Every file under Modalities/, QEC_Codes/, MagicStateProduction/, QCVV/, or QEM/ SHOULD start with this block.
+# Every file under Algorithms/, Modalities/, QEC_Codes/, MagicStateProduction/, QCVV/, or QEM/ SHOULD start
+# with this block. Algorithm documents use the same header and ``parameter_entry`` rules as assumption files.
 document_header:
   required_fields:
     document_id:
@@ -59,8 +60,14 @@ parameter_entry:
     deprecated_in_favor_of: { description: Replacement parameter key or document_id if superseded. }
 
 # Structured reference tables: a single parameter_entry may use ``value:`` as a nested map or list of maps
-# (e.g. paper Table 1 pins by n, or Table 2 rows keyed by ccz_factories). Keep full provenance on that
-# parent entry; use a descriptive ``unit`` string (e.g. paper_table1_pins_by_modulus_bits).
+# (e.g. paper Table 1 pins by n, Table 2 rows keyed by ccz_factories, or ECDLP logical resource envelopes
+# with multiple named variants). Keep full provenance on that parent entry; use a descriptive ``unit``
+# string (e.g. paper_table1_pins_by_modulus_bits, paper_logical_resource_envelopes).
+
+# Algorithm documents (under ../Algorithms/) may also define:
+# - ``cryptographic_problem``, ``quantum_algorithm_family`` (parameter_entry rows)
+# - ``paper_*`` structured blocks for headline logical qubit / gate budgets at fixed problem size
+# - Formula strings for scaling with problem size (e.g. modulus bit length n) where applicable
 
 # Scenario files live under ../Configs/ (see repo README). Optional contract for later loaders:
 scenario_file:

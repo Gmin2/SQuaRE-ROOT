@@ -1,0 +1,62 @@
+# Physical assumptions for the “standard superconducting + planar + ~10^-3 gate error” baseline narrative in
+# Babbush et al. (2026) cryptocurrency resource whitepaper. Distinct document_id from Gidney & Ekerå 2021
+# so scenarios can cite this paper’s headline comparisons directly.
+document_id: superconducting_babbush_et_al_2026
+schema_version: 1
+primary_reference: >-
+  Babbush, R., Zalcman, A., Gidney, C., Broughton, M., Khattar, T., Neven, H., Bergamaschi, T., Drake, J., &
+  Boneh, D. Securing Elliptic Curve Cryptocurrencies against Quantum Vulnerabilities: Resource Estimates
+  and Mitigations (2026).
+date_issued: "2026-03-30"
+notes: >
+  Abstract and introduction quote 10^-3 physical error rates and planar connectivity for superconducting
+  headline resource estimates (runtime on order of minutes; physical qubit counts below ~0.5M in their
+  narrative). Microsecond-level cycle and reaction times are not fixed in the abstract; values below match
+  the order-of-magnitude Gidney & Ekerå 2021 Table-2-style superconducting row unless superseded by a table
+  in the full Babbush et al. text—refine from the paper body when extracting detailed timing.
+
+characteristic_physical_gate_error_rate:
+  value: 0.001
+  unit: "error_probability_per_gate"
+  confidence: estimated
+  source: "Babbush et al. (2026), abstract (10^-3 physical error rates on superconducting architectures)"
+  date: "2026-03-30"
+  section: "Abstract"
+  notes: Stated as 10^-3 in the abstract for the superconducting headline scenario.
+  layer: physical
+
+surface_code_cycle_time:
+  value: 1.0
+  unit: "microseconds"
+  confidence: speculative
+  source: "Order-of-magnitude placeholder consistent with large-scale superconducting surface-code models; refine from Babbush et al. main text"
+  date: "2026-03-30"
+  section: "SQuaRE placeholder (not abstract)"
+  notes: Aligns with Gidney & Ekerå 2021 Table 2 “(ours) 2019” cycle scale until replaced by paper-specific timing.
+
+classical_control_reaction_time:
+  value: 10.0
+  unit: "microseconds"
+  confidence: speculative
+  source: "Order-of-magnitude placeholder; refine from Babbush et al. main text"
+  date: "2026-03-30"
+  section: "SQuaRE placeholder (not abstract)"
+  notes: Used by reaction-limited schedule heuristics in reports when enabled.
+
+connectivity_model:
+  value: "planar_nearest_neighbor"
+  unit: "descriptor"
+  confidence: estimated
+  source: "Babbush et al. (2026), abstract (planar connectivity)"
+  date: "2026-03-30"
+  section: "Abstract"
+  layer: physical
+
+platform_class:
+  value: "superconducting_planar_surface_code_headline"
+  unit: "descriptor"
+  confidence: estimated
+  source: "Babbush et al. (2026), introduction (standard superconducting + surface-code error correction)"
+  date: "2026-03-30"
+  section: "Introduction"
+  layer: physical

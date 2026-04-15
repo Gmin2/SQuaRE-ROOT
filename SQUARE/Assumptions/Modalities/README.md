@@ -9,3 +9,4 @@ Place one logical profile per file (e.g. `superconducting_gidney_ekera_2021.yaml
 | File | Reference |
 |------|-----------|
 | `superconducting_gidney_ekera_2021.yaml` | Gidney & Ekerå, *Quantum* 5, 433 (2021); Table 2 physical assumptions |
+| `superconducting_babbush_et_al_2026.yaml` | Babbush et al. (2026); ~10⁻³ gate error + planar superconducting headline baseline (cycle/reaction placeholders documented) |

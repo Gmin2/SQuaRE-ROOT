@@ -9,3 +9,4 @@ Each file should declare a `document_header` consistent with `Assumptions/Schema
 | File | Reference |
 |------|-----------|
 | `shor_rsa_gidney_ekera_2021.yaml` | Gidney & Ekerå, *Quantum* 5, 433 (2021); Table 1 abstract costs + RSA / Ekerå–Håstad context |
+| `ecdlp_secp256k1_babbush_et_al_2026.yaml` | Babbush et al. (2026), ECDLP on secp256k1; abstract logical qubit / Toffoli envelopes + narrative physical-qubit headline |
