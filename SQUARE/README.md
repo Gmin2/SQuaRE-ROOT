@@ -30,7 +30,7 @@ Build metadata (`*.egg-info/`, `__pycache__/`, `.pytest_cache/`) is gitignored a
 
 Use `square.loader.load_scenario_bundle` with a YAML under `Configs/` that lists relative `paths` to modality, `qec_code`, `magic`, `algorithm`, and optional `magic_aux`, `qcvv`, `qem`. Paths are resolved from the repo root (the directory that contains `Assumptions/Schemas.yaml`).
 
-Example scenarios: `Configs/rsa2048_gidney_ekera_2021_parallel.yaml` (RSA-2048), `Configs/ecdlp_secp256k1_babbush_2026_low_toffoli.yaml` (ECDLP secp256k1, Babbush et al. envelope).
+Example scenarios: `Configs/rsa2048_gidney_ekera_2021_parallel.yaml` (RSA-2048), `Configs/ecdlp_secp256k1_babbush_2026_low_toffoli.yaml` (ECDLP secp256k1, Babbush et al. envelope). **Validation / literature comparison:** add entries to `docs/validation_index.yaml` and prose under `docs/validation_overview.md` (one overview file + structured index, not one `.md` per paper).
 
 New YAML contributions must satisfy `Schemas.yaml` (document header + provenance on every parameter: `value`, `unit`, `confidence`, `source`, `date`; add `doi` / `section` / `notes` when useful).
 

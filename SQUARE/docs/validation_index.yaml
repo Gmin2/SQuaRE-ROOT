@@ -1,0 +1,39 @@
+# validation_index.yaml — structured metadata for “SQuaRE vs literature” comparisons.
+#
+# Add a new entry when you introduce a primary source + scenario family; keep long prose in a single
+# file: docs/validation_overview.md (one section per entry, anchor = overview_section_anchor).
+#
+# This file stays small and grep-friendly; avoid one markdown file per paper.
+schema_version: 1
+
+entries:
+  - id: ecdlp_secp256k1_babbush_et_al_2026
+    algorithm_document_id: ecdlp_secp256k1_babbush_et_al_2026
+    example_scenario: Configs/ecdlp_secp256k1_babbush_2026_low_toffoli.yaml
+    primary_reference: >-
+      Babbush, R., Zalcman, A., Gidney, C., et al. (2026). Securing Elliptic Curve Cryptocurrencies
+      against Quantum Vulnerabilities: Resource Estimates and Mitigations.
+    date_issued: "2026-03-30"
+    comparison_scope: >-
+      Compares SQuaRE report outputs to abstract/introduction headlines only. Not a replication of the
+      paper’s internal compiler, layer schedule, or ZK-backed circuit costs.
+    paper_headlines:
+      - "256-bit ECDLP on secp256k1; example scenario uses low_toffoli_variant (≤1450 logical qubits, ≤70M Toffoli gates)."
+      - "Superconducting ~10⁻³ physical error, planar connectivity: attack runtime order minutes; under ~0.5M physical qubits (narrative headline)."
+    report_json_paths:
+      naive_serial_days: dashboard.naive_serial_time_days_from_depth_times_cycle
+      code_distance_d: dashboard.code_distance_d
+      physical_qubits_per_logical: qec_overhead.logical_qubit_patch_physical_qubit_count.physical_qubits_per_logical
+      data_plane_physical_qubits: dashboard.approximate_data_plane_physical_qubits
+      paper_narrative_physical_cap: algorithm_metrics.ecdlp.paper_headline_physical_qubits_upper_bound_narrative
+    representative_run_snapshot: >-
+      Typical run (no CLI overrides): heuristic d≈21; patch 2(d+1)² → 968 physical qubits per logical at that d;
+      naive data-plane product ~1.4×10⁶; naive serial time ~0.00081 days (~70 s). Re-run build_scenario_report
+      if defaults change.
+    discrepancy_categories:
+      - accounting: Paper reports end-to-end physical footprint; SQuaRE naive metric is logical×patch (data plane) at heuristic d.
+      - depth_proxy: abstract_measurement_depth_layers = Toffoli × multiplier — not the paper’s compiled fault-tolerant schedule.
+      - distance_policy: Union-bound heuristic d is not the paper’s distance optimizer.
+      - modality_timings: superconducting_babbush_et_al_2026 may use placeholder µs timings until extracted from full text.
+      - no_pinned_totals: Unlike G&E RSA, there are no Table-2-style pinned end-to-end rows for this source in magic YAML.
+    overview_section_anchor: ecdlp-babbush-et-al-2026
