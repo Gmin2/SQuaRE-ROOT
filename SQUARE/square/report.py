@@ -21,13 +21,16 @@ from square.layout_optimization import (
     summarize_layout_optimization,
 )
 from square.loader import ScenarioBundle
-from square.qec_distance_heuristic import suggest_surface_code_distance_union_bound
+from square.qec_distance_heuristic import (
+    phenomenological_logical_error_per_cycle,
+    suggest_surface_code_distance_union_bound,
+)
 from square.schedule_heuristic import (
     build_parallel_depth_schedule_v1,
     infer_reaction_limited_from_scenario,
 )
 
-_REPORT_CONTRACT_VERSION = 6
+_REPORT_CONTRACT_VERSION = 7
 
 # Curated modality keys surfaced under top-level ``physical_layer`` (OSRE native physical layer).
 OSRE_EXTENDED_PHYSICAL_PARAMETER_KEYS: frozenset[str] = frozenset(
@@ -661,6 +664,129 @@ def _build_layout_optimization_block(
     }
 
 
+def _build_logical_fault_model_block(
+    *,
+    distance_d: int | None,
+    modality: Mapping[str, Any],
+    qec: Mapping[str, Any],
+    warnings: list[str],
+) -> dict[str, Any]:
+    """
+    Phenomenological logical error per QEC cycle and logical-cycle-time proxy (OSRE memo).
+
+    Logical error uses :func:`~square.qec_distance_heuristic.phenomenological_logical_error_per_cycle`
+    (same as heuristic distance selection). Cycle time uses ``max`` of modality
+    ``surface_code_cycle_time`` and ``classical_control_reaction_time``, plus optional QEC
+    ``qec_decode_latency_microseconds`` and ``qec_measurement_round_time_microseconds`` when present.
+    """
+
+    def _optional_positive_us(container: Mapping[str, Any], key: str) -> float | None:
+        entry = container.get(key)
+        if not isinstance(entry, dict) or entry.get("value") is None:
+            return None
+        try:
+            v = float(entry["value"])
+        except (TypeError, ValueError):
+            return None
+        return v if v > 0 else None
+
+    gate_entry = modality.get("characteristic_physical_gate_error_rate")
+    p_phys: float | None = None
+    if isinstance(gate_entry, dict) and gate_entry.get("value") is not None:
+        try:
+            p_phys = float(gate_entry["value"])
+        except (TypeError, ValueError):
+            p_phys = None
+
+    p_th = _param_entry_float(
+        qec.get("heuristic_surface_code_physical_threshold_order_of_magnitude"),
+        0.01,
+    )
+    pref_a = _param_entry_float(qec.get("heuristic_logical_error_prefactor"), 0.05)
+
+    pl: float | None = None
+    exponent_half_distance: int | None = None
+    if distance_d is not None and int(distance_d) > 0 and p_phys is not None:
+        d_int = int(distance_d)
+        exponent_half_distance = (d_int + 1) // 2
+        if p_phys >= p_th:
+            warnings.append(
+                "logical_fault_model: characteristic_physical_gate_error_rate >= "
+                "heuristic_surface_code_physical_threshold_order_of_magnitude; phenomenological "
+                "logical_error_rate_per_cycle omitted (model assumes p_phys < p_th)."
+            )
+        else:
+            pl = phenomenological_logical_error_per_cycle(
+                d_int,
+                physical_gate_error_rate=p_phys,
+                phenomenological_p_th=p_th,
+                phenomenological_prefactor=pref_a,
+            )
+
+    cycle_us = _optional_positive_us(modality, "surface_code_cycle_time")
+    reaction_us = _optional_positive_us(modality, "classical_control_reaction_time")
+    decode_us = _optional_positive_us(qec, "qec_decode_latency_microseconds")
+    measure_us = _optional_positive_us(qec, "qec_measurement_round_time_microseconds")
+
+    named_vals: list[tuple[str, float]] = []
+    if cycle_us is not None:
+        named_vals.append(("surface_code_cycle_time_microseconds", cycle_us))
+    if reaction_us is not None:
+        named_vals.append(("classical_control_reaction_time_microseconds", reaction_us))
+    if decode_us is not None:
+        named_vals.append(("qec_decode_latency_microseconds", decode_us))
+    if measure_us is not None:
+        named_vals.append(("qec_measurement_round_time_microseconds", measure_us))
+
+    tau_us: float | None = None
+    if named_vals:
+        tau_us = max(v for _, v in named_vals)
+        warnings.append(
+            "logical_fault_model.logical_cycle_time_microseconds is max(available components); "
+            "not a compiled schedule. Add qec_decode_latency_microseconds / "
+            "qec_measurement_round_time_microseconds on QEC YAML when pinning OSRE τ_cycle pieces."
+        )
+
+    if pl is not None:
+        warnings.append(
+            "logical_fault_model.logical_error_rate_per_cycle is a phenomenological proxy "
+            "A·(p/p_th)^ceil((d+1)/2), not a paper-calibrated logical channel."
+        )
+
+    if pl is not None and tau_us is not None:
+        status = "computed"
+    elif pl is not None or tau_us is not None:
+        status = "partial"
+    else:
+        status = "insufficient_inputs"
+
+    components_map: dict[str, float | None] = {
+        "surface_code_cycle_time_microseconds": cycle_us,
+        "classical_control_reaction_time_microseconds": reaction_us,
+        "qec_decode_latency_microseconds": decode_us,
+        "qec_measurement_round_time_microseconds": measure_us,
+    }
+
+    return {
+        "schema": "logical_fault_model_v1",
+        "status": status,
+        "logical_error_rate_per_cycle": pl,
+        "logical_error_model": "phenomenological_prefactor_times_p_over_pth_to_half_distance",
+        "exponent_half_distance": exponent_half_distance,
+        "inputs": {
+            "code_distance_d": distance_d,
+            "physical_gate_error_rate": p_phys,
+            "heuristic_threshold_p_th": p_th,
+            "heuristic_prefactor_a": pref_a,
+        },
+        "logical_cycle_time": {
+            "logical_cycle_time_microseconds": tau_us,
+            "components_microseconds": components_map,
+            "provenance": "max_of_available_modality_and_optional_qec_latency_v1",
+        },
+    }
+
+
 def build_scenario_report(
     bundle: ScenarioBundle,
     *,
@@ -1116,6 +1242,12 @@ def build_scenario_report(
                 **(qec_patch_eval_meta or {}),
             }
         },
+        "logical_fault_model": _build_logical_fault_model_block(
+            distance_d=d_resolved,
+            modality=bundle.modality,
+            qec=bundle.qec,
+            warnings=warnings,
+        ),
         "physical_rollup": physical_rollup,
         "physical_layer": _build_physical_layer_snapshot(
             modality_p,
@@ -1227,11 +1359,21 @@ def report_to_markdown(report: Mapping[str, Any]) -> str:
     )
     lines.append(f"- **T-factory fallback flagged:** {dash.get('t_factory_fallback_recommended')}\n")
 
-    pl = report.get("physical_layer") or {}
+    phys_layer = report.get("physical_layer") or {}
     lines.append("\n## Physical layer (OSRE snapshot)\n")
     lines.append(
-        f"- **Status:** `{pl.get('status')}` · **document_id** `{pl.get('document_id')}` · "
-        f"**extended keys** {pl.get('parameter_keys')}\n"
+        f"- **Status:** `{phys_layer.get('status')}` · **document_id** `{phys_layer.get('document_id')}` · "
+        f"**extended keys** {phys_layer.get('parameter_keys')}\n"
+    )
+
+    lf = report.get("logical_fault_model") or {}
+    lfc = lf.get("logical_cycle_time") or {}
+    lines.append("\n## Logical fault model\n")
+    lines.append(f"- **Status:** `{lf.get('status')}`\n")
+    lines.append(f"- **Logical error rate / cycle (phenomenological):** {lf.get('logical_error_rate_per_cycle')}\n")
+    lines.append(
+        f"- **Logical cycle time (µs, max of available components):** "
+        f"{lfc.get('logical_cycle_time_microseconds')}\n"
     )
 
     sm = report.get("system_metrics") or {}

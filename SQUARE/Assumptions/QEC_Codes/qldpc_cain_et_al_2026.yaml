@@ -81,3 +81,21 @@ heuristic_distance_max_d:
   date: "2026-03-30"
   section: "SQuaRE report heuristic"
   layer: qec
+
+qec_decode_latency_microseconds:
+  value: 5.0
+  unit: "microseconds"
+  confidence: speculative
+  source: "SQuaRE LDPC decode-latency placeholder; refine from Cain et al."
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: qec
+
+qec_measurement_round_time_microseconds:
+  value: 30.0
+  unit: "microseconds"
+  confidence: speculative
+  source: "SQuaRE measurement-round placeholder for LDPC stack"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: qec

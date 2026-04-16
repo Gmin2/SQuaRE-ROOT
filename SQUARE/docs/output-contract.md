@@ -15,7 +15,7 @@ Every report is a JSON-serializable object with at least:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `report_contract_version` | `number` | Contract version (currently `6`). |
+| `report_contract_version` | `number` | Contract version (currently `7`). |
 | `engine` | `object` | `{ "name": "square", "version": "<package version>" }`. |
 | `generated_at` | `string` | ISO-8601 UTC timestamp when the report was built. |
 | `warnings` | `array` | Human-readable strings for caveats (missing distance `d`, symbolic formulas, branch flags). |
@@ -27,6 +27,7 @@ Every report is a JSON-serializable object with at least:
 | `algorithm_metrics` | `object` | Numeric roll-up at the scenario’s `n` (and optional pinned table entries from YAML). |
 | `dashboard` | `object` | Cross-layer headline numbers for quick comparison (may include `null` where data is missing). |
 | `qec_overhead` | `object` | Slots for code-distance-dependent overhead (e.g. patch qubit formula + `d`); see below. |
+| `logical_fault_model` | `object` | Phenomenological **logical error per QEC cycle** and **logical cycle time** proxy (OSRE-style); see § `logical_fault_model`. |
 | `physical_rollup` | `object` | End-to-end **data-plane** physical qubit roll-up when both `n` and `d` are available; see below. |
 | `physical_layer` | `object` | Curated **native physical** parameters (OSRE memo alignment) copied from modality YAML; see § `physical_layer`. |
 | `system_metrics` | `object` | OSRE-style **LQC / LOB / QOT** (and related) slots; see § `system_metrics`. Numeric values are **`null`** placeholders until composed from layers. |
@@ -175,6 +176,22 @@ Present when patch formula, logical qubits, measurement depth, and physical gate
 | `approximate_data_plane_physical_qubits` | Product when both factors exist; mirrors `dashboard.approximate_data_plane_physical_qubits`. |
 | `patch_formula_status` | Same string as `qec_overhead...status`. |
 
+## `logical_fault_model`
+
+Phenomenological **logical error rate per QEC cycle** and a **logical cycle time** estimate aligned with the OSRE memo (logical error scaling; τ_cycle as max of available timing components).
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `schema` | `string` | `logical_fault_model_v1`. |
+| `status` | `string` | `computed` when both per-cycle logical error and cycle time are available; `partial` if only one; `insufficient_inputs` if neither. |
+| `logical_error_rate_per_cycle` | `number \| null` | `A·(p_phys/p_th)^ceil((d+1)/2)` via ``square.qec_distance_heuristic.phenomenological_logical_error_per_cycle`` when `d` and modality `characteristic_physical_gate_error_rate` exist and `p_phys < p_th`. **`null`** if `p_phys ≥ p_th` or inputs missing. |
+| `logical_error_model` | `string` | Model id (`phenomenological_prefactor_times_p_over_pth_to_half_distance`). |
+| `exponent_half_distance` | `number \| null` | Integer `(d+1)//2` used in the exponent when `logical_error_rate_per_cycle` is computed. |
+| `inputs` | `object` | Echo of `code_distance_d`, `physical_gate_error_rate`, `heuristic_threshold_p_th`, `heuristic_prefactor_a` from modality + QEC YAML. |
+| `logical_cycle_time` | `object` | `logical_cycle_time_microseconds`: **`max`** of available components; `components_microseconds` lists each; `provenance` describes the aggregation rule. |
+
+**Components for `logical_cycle_time_microseconds`:** modality `surface_code_cycle_time`, `classical_control_reaction_time`, and optional QEC YAML `parameter_entry` keys `qec_decode_latency_microseconds`, `qec_measurement_round_time_microseconds` (positive values only). Not a full compiled schedule.
+
 ## `physical_layer` (OSRE native physical)
 
 Curated passthrough of **extended** modality parameters (T1/T2, native gate and readout errors, idle proxy, correlated-noise multiplier, leakage proxy) that follow the OSRE memo’s physical-layer checklist. Only keys listed below are copied from `layers.modality.parameters`; the full modality map remains authoritative.
@@ -238,3 +255,4 @@ Evaluable formula strings follow **Python** syntax for powers (`**`, not `^`).
 | `4` | Optional scenario `paths.qcvv` / `paths.qem`; `sources` and `layers` include `qcvv` and `qem` (or `null`) as separate stacks from `qcvv_qem`. |
 | `5` | Adds top-level `system_metrics` (OSRE LQC/LOB/QOT slots); all metric fields **`null`** and `status: not_computed` until composed roll-ups land. |
 | `6` | Adds top-level `physical_layer` — curated passthrough of OSRE extended native physical parameters from modality YAML (`passthrough_from_modality` or `no_extended_keys_in_profile`). |
+| `7` | Adds `logical_fault_model`: phenomenological logical error per cycle + logical cycle time as max(modality cycle/reaction, optional QEC decode/measurement latencies). |

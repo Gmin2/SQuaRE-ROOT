@@ -10,3 +10,5 @@ Place one logical profile per file (e.g. `surface_gidney_ekera_2021.yaml`).
 |------|-----------|
 | `surface_gidney_ekera_2021.yaml` | Gidney & Ekerå, *Quantum* 5, 433 (2021); surface patches + lattice surgery |
 | `qldpc_cain_et_al_2026.yaml` | Cain et al. (2026), arXiv:2603.28627; quantum LDPC headline + phenomenological patch proxy in `d` |
+
+Optional **OSRE τ_cycle** components on any QEC profile: `qec_decode_latency_microseconds`, `qec_measurement_round_time_microseconds` (used by report `logical_fault_model` when present). See `docs/output-contract.md` § `logical_fault_model`.

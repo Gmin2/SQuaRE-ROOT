@@ -75,3 +75,22 @@ heuristic_distance_max_d:
   date: "2025-03-20"
   section: "SQuaRE report heuristic"
   layer: qec
+
+# Optional OSRE-style τ_cycle components (used by report ``logical_fault_model`` max() when present).
+qec_decode_latency_microseconds:
+  value: 2.0
+  unit: "microseconds"
+  confidence: speculative
+  source: "SQuaRE placeholder decode latency; not pinned in Gidney & Ekerå 2021 Table 2"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: qec
+
+qec_measurement_round_time_microseconds:
+  value: 1.5
+  unit: "microseconds"
+  confidence: speculative
+  source: "SQuaRE placeholder measurement round time; refine from layout model"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: qec
