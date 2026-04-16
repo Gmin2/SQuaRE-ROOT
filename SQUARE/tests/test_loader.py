@@ -93,3 +93,17 @@ def test_load_ecdlp_secp256k1_babbush_2026_low_toffoli() -> None:
     env = bundle.algorithm["ecdlp_logical_resource_envelopes_secp256k1"]["value"]["low_toffoli_variant"]
     assert env["logical_qubits_upper_bound"] == 1450
     assert env["toffoli_gates_upper_bound"] == 70_000_000
+
+
+def test_load_ecdlp_secp256k1_cain_2026_neutral_atom_qldpc() -> None:
+    root = find_square_root()
+    scenario = root / "Configs" / "ecdlp_secp256k1_cain_2026_neutral_atom_qldpc.yaml"
+    assert scenario.is_file(), f"Missing scenario file: {scenario}"
+
+    bundle = load_scenario_bundle(scenario, root=root)
+
+    assert bundle.scenario.get("scenario") == "ecdlp_secp256k1_cain_2026_neutral_atom_qldpc"
+    assert bundle.modality["document_id"] == "neutral_atom_cain_et_al_2026"
+    assert bundle.qec["document_id"] == "qldpc_cain_et_al_2026"
+    assert bundle.qec["code_family"]["value"] == "quantum_ldpc"
+    assert bundle.algorithm["document_id"] == "ecdlp_secp256k1_babbush_et_al_2026"

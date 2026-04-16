@@ -10,3 +10,4 @@ Place one logical profile per file (e.g. `superconducting_gidney_ekera_2021.yaml
 |------|-----------|
 | `superconducting_gidney_ekera_2021.yaml` | Gidney & Ekerå, *Quantum* 5, 433 (2021); Table 2 physical assumptions |
 | `superconducting_babbush_et_al_2026.yaml` | Babbush et al. (2026); ~10⁻³ gate error + planar superconducting headline baseline (cycle/reaction placeholders documented) |
+| `neutral_atom_cain_et_al_2026.yaml` | Cain et al. (2026), arXiv:2603.28627; neutral-atom / reconfigurable headline (effective QEC-cycle proxies documented) |

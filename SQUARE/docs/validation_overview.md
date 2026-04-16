@@ -59,3 +59,28 @@ Values below come from `build_scenario_report` on that scenario (engine as insta
 ### How to tighten alignment
 
 Replace **placeholder modality timings** from the full paper, refine the **Toffoli→depth** rule, and add **end-to-end** or **pinned** rows to the assumptions database when available.
+
+---
+
+<a id="ecdlp-cain-et-al-2026-neutral-atom-qldpc"></a>
+
+## ECDLP — Cain et al. (2026), neutral atom + QLDPC stack
+
+**Index:** `entries[].id == ecdlp_secp256k1_cain_et_al_2026_neutral_atom_qldpc` in [`validation_index.yaml`](validation_index.yaml).
+
+Scenario [`Configs/ecdlp_secp256k1_cain_2026_neutral_atom_qldpc.yaml`](../Configs/ecdlp_secp256k1_cain_2026_neutral_atom_qldpc.yaml) keeps the **same algorithm document** as the Babbush ECDLP example (`ecdlp_secp256k1_babbush_et_al_2026`) but points `paths.modality` at [`neutral_atom_cain_et_al_2026.yaml`](../Assumptions/Modalities/neutral_atom_cain_et_al_2026.yaml) and `paths.qec_code` at [`qldpc_cain_et_al_2026.yaml`](../Assumptions/QEC_Codes/qldpc_cain_et_al_2026.yaml), per *Shor's algorithm is possible with as few as 10,000 reconfigurable atomic qubits* (arXiv:2603.28627).
+
+### What the paper states (abstract)
+
+- Combines **high-rate quantum error-correcting codes**, **efficient logical instruction sets**, and **circuit design** so Shor-class workloads at cryptographic scales can use **~10k** reconfigurable atomic qubits (headline), with **~26k** physical atoms cited for **P-256 discrete log** in **a few days** under plausible assumptions.
+- Positions **neutral-atom** experiments (fault-tolerant ops below threshold, hundreds of qubits, large arrays) as motivation.
+
+### What SQuaRE does here
+
+- **Logical layer:** Unchanged ECDLP envelopes from the Babbush algorithm YAML (e.g. `low_toffoli_variant`).
+- **Physical layer:** Neutral-atom modality YAML supplies gate/cycle/reaction **proxies** for report plumbing; QLDPC YAML supplies `code_family: quantum_ldpc` and a **symbolic** `logical_qubit_patch_physical_qubit_count_formula` in `d` (not a full LDPC layout from the paper).
+- **Heuristic distance** still uses the phenomenological union-bound path with LDPC-tuned placeholder threshold metadata—**not** Cain et al.’s optimizer.
+
+### How to tighten alignment
+
+Pin **native error**, **syndrome / cycle times**, and **physical footprint** from the paper’s main text into the modality and QEC files; replace the patch formula when you have layout constants that map cleanly into SQuaRE’s `d`-based dashboard hooks or extend the engine for LDPC-specific parameters.

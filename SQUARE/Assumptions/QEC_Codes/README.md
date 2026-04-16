@@ -9,3 +9,4 @@ Place one logical profile per file (e.g. `surface_gidney_ekera_2021.yaml`).
 | File | Reference |
 |------|-----------|
 | `surface_gidney_ekera_2021.yaml` | Gidney & Ekerå, *Quantum* 5, 433 (2021); surface patches + lattice surgery |
+| `qldpc_cain_et_al_2026.yaml` | Cain et al. (2026), arXiv:2603.28627; quantum LDPC headline + phenomenological patch proxy in `d` |

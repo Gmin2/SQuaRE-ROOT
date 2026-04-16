@@ -1,0 +1,66 @@
+# Neutral-atom / reconfigurable-array physical assumptions aligned to Cain et al. (2026) headline narrative
+# (high-rate QEC + efficient logical layers; cryptographically relevant Shor/ECDLP at ~10k–26k physical qubits).
+document_id: neutral_atom_cain_et_al_2026
+schema_version: 1
+primary_reference: >-
+  Cain, M., Xu, Q., King, R., Picard, L. R. B., Levine, H., Endres, M., Preskill, J., Huang, H.-Y., &
+  Bluvstein, D. Shor's algorithm is possible with as few as 10,000 reconfigurable atomic qubits (2026).
+arxiv: "2603.28627"
+date_issued: "2026-03-30"
+notes: >
+  Abstract emphasizes neutral-atom demonstrations (fault-tolerant ops below threshold, hundreds of logical
+  qubits, arrays of thousands of coherent atoms) and reconfigurable connectivity for LDPC-style stacks.
+  Scalar gate/cycle/reaction proxies below are SQuaRE placeholders for report plumbing: replace with values
+  pinned from the paper body (native error, syndrome extraction cadence, shuttling/reconfiguration) when
+  extracting tables. The key ``surface_code_cycle_time`` is reused as an **effective QEC cycle / syndrome-round
+  time** (microseconds) for naive serial-time heuristics even though the QEC profile is not a surface code.
+
+characteristic_physical_gate_error_rate:
+  value: 0.0005
+  unit: "error_probability_per_gate"
+  confidence: estimated
+  source: "Cain et al. (2026), abstract (fault-tolerant ops below threshold on neutral atoms; no single p_g in abstract)"
+  date: "2026-03-30"
+  section: "Abstract"
+  notes: >
+    Order-of-magnitude exploratory proxy for phenomenological distance heuristics. The paper’s headline
+    resource count depends on LDPC thresholds and native gates; refine from main-text error budgets.
+  layer: physical
+
+surface_code_cycle_time:
+  value: 25.0
+  unit: "microseconds"
+  confidence: speculative
+  source: "SQuaRE placeholder — effective QEC cycle / syndrome-round proxy for naive serial stacking"
+  date: "2026-03-30"
+  section: "SQuaRE placeholder"
+  notes: >
+    Not a surface-code cycle from this paper; rename in future schema if a neutral-atom-specific key is added.
+    Tune using Cain et al. layer schedules once extracted.
+
+classical_control_reaction_time:
+  value: 40.0
+  unit: "microseconds"
+  confidence: speculative
+  source: "SQuaRE placeholder — reconfiguration / control latency scale for reaction-limited heuristics"
+  date: "2026-03-30"
+  section: "SQuaRE placeholder"
+  notes: Reconfigurable-atom architectures may spend time on moves and local control; refine from paper.
+
+connectivity_model:
+  value: "reconfigurable_neutral_atom_2d"
+  unit: "descriptor"
+  confidence: estimated
+  source: "Cain et al. (2026), abstract (reconfigurable atomic qubits; neutral-atom experiments at scale)"
+  date: "2026-03-30"
+  section: "Abstract"
+  layer: physical
+
+platform_class:
+  value: "neutral_atom_reconfigurable_qldpc_headline"
+  unit: "descriptor"
+  confidence: estimated
+  source: "Cain et al. (2026); paired QEC profile qldpc_cain_et_al_2026"
+  date: "2026-03-30"
+  section: "Abstract"
+  layer: physical
