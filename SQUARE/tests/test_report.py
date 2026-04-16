@@ -28,7 +28,7 @@ def test_build_report_rsa2048_parallel() -> None:
     bundle = load_scenario_bundle(scenario, root=root)
     report = build_scenario_report(bundle)
 
-    assert report["report_contract_version"] == 9
+    assert report["report_contract_version"] == 10
     pl = report["physical_layer"]
     assert pl["status"] == "passthrough_from_modality"
     assert pl["document_id"] == "superconducting_gidney_ekera_2021"
@@ -48,6 +48,10 @@ def test_build_report_rsa2048_parallel() -> None:
     assert sm["quantum_operations_throughput_qot"] == pytest.approx(28.0 / (10.0 * 1e-6))
     assert sm["validated_error_rate_ver"] is None
     assert sm["mitigated_operations_ceiling"] is None
+    ps = report["parameter_sensitivity"]
+    assert ps["schema"] == "parameter_sensitivity_v1"
+    assert ps["status"] == "computed"
+    assert ps["ranking_by_abs_derivative_code_distance_d"]
     assert report["scenario"]["scenario"] == "rsa2048_gidney_ekera_2021_parallel"
     assert report["algorithm_metrics"]["n"] == 2048
 
@@ -128,6 +132,7 @@ def test_build_report_rsa2048_parallel() -> None:
     assert "System metrics (OSRE)" in md
     assert "`computed`" in md
     assert "system_metrics_v2" in md
+    assert "Parameter sensitivity" in md
 
 
 def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
@@ -136,7 +141,7 @@ def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
     bundle = load_scenario_bundle(scenario, root=root)
     report = build_scenario_report(bundle)
 
-    assert report["report_contract_version"] == 9
+    assert report["report_contract_version"] == 10
     assert report["physical_layer"]["status"] == "passthrough_from_modality"
     assert report["physical_layer"]["document_id"] == "superconducting_babbush_et_al_2026"
     sm_ec = report["system_metrics"]
@@ -167,6 +172,7 @@ def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
     assert sm_ec["quantum_operations_throughput_qot"] == pytest.approx(1.0 / (10.0 * 1e-6))
     assert sm_ec["validated_error_rate_ver"] is None
     assert sm_ec["mitigated_operations_ceiling"] is None
+    assert report["parameter_sensitivity"]["status"] == "computed"
 
     dash = report["dashboard"]
     assert dash.get("ecdlp_active") is True
@@ -191,7 +197,7 @@ def test_build_report_physical_layer_cain_neutral_atom() -> None:
     bundle = load_scenario_bundle(scenario, root=root)
     report = build_scenario_report(bundle)
     pl = report["physical_layer"]
-    assert report["report_contract_version"] == 9
+    assert report["report_contract_version"] == 10
     assert pl["document_id"] == "neutral_atom_cain_et_al_2026"
     assert pl["status"] == "passthrough_from_modality"
     assert pl["parameters"]["coherence_time_t1_microseconds"]["value"] == 15000.0

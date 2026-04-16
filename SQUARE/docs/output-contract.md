@@ -15,7 +15,7 @@ Every report is a JSON-serializable object with at least:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `report_contract_version` | `number` | Contract version (currently `9`). |
+| `report_contract_version` | `number` | Contract version (currently `10`). |
 | `engine` | `object` | `{ "name": "square", "version": "<package version>" }`. |
 | `generated_at` | `string` | ISO-8601 UTC timestamp when the report was built. |
 | `warnings` | `array` | Human-readable strings for caveats (missing distance `d`, symbolic formulas, branch flags). |
@@ -31,6 +31,7 @@ Every report is a JSON-serializable object with at least:
 | `physical_rollup` | `object` | End-to-end **data-plane** physical qubit roll-up when both `n` and `d` are available; see below. |
 | `physical_layer` | `object` | Curated **native physical** parameters (OSRE memo alignment) copied from modality YAML; see § `physical_layer`. |
 | `system_metrics` | `object` | OSRE-style **LQC / LOB / QOT** (and related); see § `system_metrics`. Metrics are filled when inputs exist (`computed` / `partial`); otherwise `insufficient_inputs` with explanatory `notes`. |
+| `parameter_sensitivity` | `object` | Local finite-difference sensitivities (heuristic ``d``, naive serial time); see § `parameter_sensitivity`. |
 | `timing` | `object` | Table 2 pins, naive depth×cycle, optional schedule heuristic + calibration; see below. |
 | `qec_distance_resolution` | `object` | How `d` was chosen (`cli_override`, `explicit_scenario`, `heuristic_union_bound`, etc.). |
 | `layout_estimate` | `object` | Data-plane proxy, pinned end-to-end qubits, derived non-data overhead, optional YAML factory footprint; see below. |
@@ -123,6 +124,7 @@ Headline fields (all optional / nullable):
 | `heuristic` | `object` | Present for `heuristic_union_bound`; includes `scan_rows` when using discrete scan, plus `closed_form_distance_d` for comparison. |
 | `logical_error_budget` | `number` | Budget passed into the heuristic when applicable. |
 | `distance_optimizer` | `string` | `discrete_scan` or `closed_form` (which engine selected `d`). |
+| `physical_gate_error_rate_effective` | `number \| null` | When ``mode`` is ``heuristic_union_bound``, the **effective** physical gate error used in the union bound (nominal × QCVV × scaling penalty); otherwise often omitted. |
 
 ## `layout_estimate`
 
@@ -184,10 +186,10 @@ Phenomenological **logical error rate per QEC cycle** and a **logical cycle time
 |-----|------|-------------|
 | `schema` | `string` | `logical_fault_model_v1`. |
 | `status` | `string` | `computed` when both per-cycle logical error and cycle time are available; `partial` if only one; `insufficient_inputs` if neither. |
-| `logical_error_rate_per_cycle` | `number \| null` | `A·(p_phys/p_th)^ceil((d+1)/2)` via ``square.qec_distance_heuristic.phenomenological_logical_error_per_cycle`` when `d` and modality `characteristic_physical_gate_error_rate` exist and `p_phys < p_th`. **`null`** if `p_phys ≥ p_th` or inputs missing. |
+| `logical_error_rate_per_cycle` | `number \| null` | `A·(p_phys/p_th)^ceil((d+1)/2)` via ``square.qec_distance_heuristic.phenomenological_logical_error_per_cycle`` when `d` and effective physical gate error exist and `p_phys < p_th`. **`p_phys`** is **nominal × QCVV × scaling penalty** when those factors are configured (see `inputs`); **`null`** if `p_phys ≥ p_th` or inputs missing. |
 | `logical_error_model` | `string` | Model id (`phenomenological_prefactor_times_p_over_pth_to_half_distance`). |
 | `exponent_half_distance` | `number \| null` | Integer `(d+1)//2` used in the exponent when `logical_error_rate_per_cycle` is computed. |
-| `inputs` | `object` | Echo of `code_distance_d`, `physical_gate_error_rate`, `heuristic_threshold_p_th`, `heuristic_prefactor_a` from modality + QEC YAML. |
+| `inputs` | `object` | Includes `code_distance_d`, `physical_gate_error_rate` (effective model rate), `physical_gate_error_rate_nominal`, optional **VER/scaling** keys (`qcvv_multiplier_sigma`, `scaling_penalty_*`, `scaling_reference_physical_qubits`, `p_effective`), and heuristic QEC parameters. |
 | `logical_cycle_time` | `object` | `logical_cycle_time_microseconds`: **`max`** of available components; `components_microseconds` lists each; `provenance` describes the aggregation rule. |
 
 **Components for `logical_cycle_time_microseconds`:** modality `surface_code_cycle_time`, `classical_control_reaction_time`, and optional QEC YAML `parameter_entry` keys `qec_decode_latency_microseconds`, `qec_measurement_round_time_microseconds` (positive values only). Not a full compiled schedule.
@@ -208,7 +210,7 @@ Curated passthrough of **extended** modality parameters (T1/T2, native gate and 
 
 ## `system_metrics` (OSRE-aligned)
 
-**System-level** quantities aligned with the OSRE Product Requirements Memorandum (LQC, LOB, QOT, headroom, VER, mitigated ceiling). **Contract v8+** (`system_metrics_v2`) fills **LQC**, **LOB**, **headroom**, and **QOT** from existing report inputs where possible; **contract v9** adds **VER** and **mitigated_operations_ceiling** when optional `paths.qcvv` / `paths.qem` profiles supply the documented parameter keys. Formulas are **proxies** (see `notes`).
+**System-level** quantities aligned with the OSRE Product Requirements Memorandum (LQC, LOB, QOT, headroom, VER, mitigated ceiling). **Contract v8+** (`system_metrics_v2`) fills **LQC**, **LOB**, **headroom**, and **QOT**; **v9+** adds **VER** / **mitigated_operations_ceiling** from optional `paths.qcvv` / `paths.qem`; **v10** ties **LOB** to QEM suppression on ``p_L`` and **mitigated_operations_ceiling** to sampling overhead only (see field table). Formulas are **proxies** (see `notes`).
 
 ### Scenario inputs
 
@@ -227,13 +229,35 @@ Optional block **`scenario.system_metrics`** (when present on the scenario YAML 
 | `notes` | `array` of `string` | Caveats: missing inputs per metric and model limits. |
 | `logical_qubit_capacity_lqc` | `number \| null` | **LQC** proxy: `floor(max(0, P_total/ρ − F/ρ − margin))` when `P_total` (`layout_estimate.reported_end_to_end_physical_qubits`), factory footprint `F` (`layout_estimate.factory_footprint_physical_qubits_from_yaml`), and per-logical patch size `ρ` (`physical_qubits_per_logical`) are all valid; else `null`. |
 | `logical_qubit_capacity_lqc_method` | `string \| null` | Short formula id when LQC is computed; otherwise `null`. |
-| `logical_operations_budget_lob` | `number \| null` | **LOB** proxy: `ε / p_L` with `qec.logical_error_budget` as ε and `logical_fault_model.logical_error_rate_per_cycle` as `p_L` when `p_L > 0`; else `null`. |
+| `logical_operations_budget_lob` | `number \| null` | **LOB** proxy: `ε / (p_L × s_QEM)` with `qec.logical_error_budget` as ε, phenomenological `p_L` from `logical_fault_model`, and QEM `effective_logical_error_rate_suppression_factor` as `s_QEM` (`1` when no QEM path). |
 | `headroom_logical_depth` | `number \| null` | `LOB − D` when both LOB and `abstract_measurement_depth_layers` exist; else `null`. |
 | `quantum_operations_throughput_qot` | `number \| null` | **QOT** proxy: `parallel_width / τ` (abstract layer-proxies per second), with `τ` = `logical_fault_model.logical_cycle_time.logical_cycle_time_microseconds` × 10⁻⁶ s, and `parallel_width` = `max(1, timing.schedule_model_v1.ccz_factory_count)` when the schedule block exists, else `max(1, ccz_factory_count)` from Table 2 row, else `1`. |
-| `validated_error_rate_ver` | `number \| null` | **VER** (QCVV-grounded proxy): `p_nominal × σ` when `paths.qcvv` is set, modality supplies `characteristic_physical_gate_error_rate`, and QCVV supplies `effective_physical_error_rate_multiplier_from_characterization` (`σ` > 0). Else `null`. Does not recompute `logical_fault_model` or heuristic `d`. |
-| `mitigated_operations_ceiling` | `number \| null` | **QEM proxy**: `(ε / p_L) / s / Γ` = `LOB / s / Γ` when `paths.qem` is set and LOB exists, with QEM `effective_logical_error_rate_suppression_factor` (`s`, defaults to `1` if missing/invalid) and `sampling_shot_overhead_multiplier` (`Γ`, defaults to `1`). Values `s < 1` expand logical depth budget vs bare LOB; `Γ > 1` reduces the ceiling for sampling cost. Else `null`. |
+| `validated_error_rate_ver` | `number \| null` | **VER** (QCVV-grounded proxy): `p_nominal × σ` when `paths.qcvv` is set, modality supplies `characteristic_physical_gate_error_rate`, and QCVV supplies `effective_physical_error_rate_multiplier_from_characterization` (`σ` > 0). Else `null`. Heuristic ``d`` and `logical_fault_model` use **effective** physical error (VER × scaling penalty on QEC YAML). |
+| `mitigated_operations_ceiling` | `number \| null` | **QEM sampling proxy**: `LOB / Γ` when `paths.qem` is set and LOB exists, with `sampling_shot_overhead_multiplier` as `Γ` (suppression `s` is already in LOB). Else `null`. |
 
 **Consumers:** Treat nullable metrics as **absent** when `null`. Prefer JSON over Markdown summaries; `report_to_markdown` surfaces headline LQC/LOB/QOT lines when present.
+
+## `parameter_sensitivity`
+
+Local **symmetric relative finite-difference** sensitivities (OSRE memo style) for a few headline knobs. Emitted when ``qec.emit_parameter_sensitivity`` is not ``false`` and the distance policy produced ``heuristic_union_bound`` with resolved ``d`` and effective gate error.
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `schema` | `string` | `parameter_sensitivity_v1`. |
+| `status` | `string` | `computed` \| `skipped` \| `insufficient_inputs`. |
+| `method` | `string \| null` | e.g. `symmetric_relative_finite_difference`. |
+| `relative_perturbation` | `number \| null` | Relative step on parameters (implementation default `1e-5`). |
+| `rows` | `array` | Each row: `parameter`, `layer`, `metric`, `baseline_parameter_value`, `baseline_metric_value`, optional `derivative_metric_per_parameter`, optional `elasticity_metric_times_parameter_over_value`. |
+| `ranking_by_abs_derivative_code_distance_d` | `array` | Parameter names sorted by \|∂(code_distance_d)/∂param\| when that derivative exists. |
+| `notes` | `array` of `string` | Model limits (discrete ``d``, secant between perturbed optima, etc.). |
+
+**QEC YAML (optional) for scaling + opt-out:**
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `heuristic_scaling_penalty_log_coefficient` | `parameter_entry` | Coefficient ``α`` in ``1 + α log N + β N`` applied to **nominal** gate error after QCVV (``N`` = Table-2 total physical qubits when pinned, else evaluated logical width proxy). Default ``0``. |
+| `heuristic_scaling_penalty_linear_coefficient` | `parameter_entry` | Coefficient ``β`` in the same penalty. Default ``0``. |
+| `emit_parameter_sensitivity` | `boolean` | If ``false``, ``parameter_sensitivity.status`` is ``skipped``. |
 
 ## Provenance
 
@@ -254,6 +278,7 @@ Evaluable formula strings follow **Python** syntax for powers (`**`, not `^`).
 - `timing.schedule_model_v1` is a coarse bound (depth scaling ÷ factory count); use pinned Table 2 wall-clock for regression against the paper.
 - `layout_estimate.derived_non_data_overhead_physical_qubits` is a residual (total minus naive data plane), not a decomposed factory layout.
 - `layout_optimization` is a **tabular scan** over `d`, not a placement or routing optimizer.
+- `parameter_sensitivity` uses **discrete** heuristic distances; derivatives are secants and can be zero across flat regions.
 - No endorsement of feasibility; warnings highlight missing inputs, naive products, and branch cuts (e.g. T-factory fallback).
 
 ## Contract history
@@ -269,3 +294,4 @@ Evaluable formula strings follow **Python** syntax for powers (`**`, not `^`).
 | `7` | Adds `logical_fault_model`: phenomenological logical error per cycle + logical cycle time as max(modality cycle/reaction, optional QEC decode/measurement latencies). |
 | `8` | `system_metrics` → **`system_metrics_v2`**: computed **LQC** (pinned total + YAML factory footprint + patch ρ), **LOB** / **headroom** (ε/p_L vs measurement depth), **QOT** (parallel width / τ); `notes` as `array`; optional `scenario.system_metrics.routing_margin_logical_qubits` for LQC. |
 | `9` | `system_metrics`: **VER** from QCVV × modality gate error when `paths.qcvv` is present; **mitigated_operations_ceiling** from QEM suppression and sampling multipliers when `paths.qem` is present (see § `system_metrics`). |
+| `10` | **Effective physical error stack** (QCVV × optional QEC scaling penalty on ``N``) drives heuristic ``d``, `logical_fault_model`, and `layout_optimization`; **LOB** includes QEM ``s`` on ``p_L``; **mitigated_operations_ceiling** = LOB/Γ; top-level **`parameter_sensitivity`** (finite differences); optional `qec.emit_parameter_sensitivity: false` to skip. |
