@@ -31,7 +31,7 @@ from square.schedule_heuristic import (
     infer_reaction_limited_from_scenario,
 )
 
-_REPORT_CONTRACT_VERSION = 8
+_REPORT_CONTRACT_VERSION = 9
 
 # Curated modality keys surfaced under top-level ``physical_layer`` (OSRE native physical layer).
 OSRE_EXTENDED_PHYSICAL_PARAMETER_KEYS: frozenset[str] = frozenset(
@@ -93,9 +93,44 @@ def _routing_margin_logical_qubits(scenario: Mapping[str, Any]) -> float:
     return max(0.0, v)
 
 
+def _document_parameter_value_optional(doc: Mapping[str, Any] | None, key: str) -> float | None:
+    """
+    Read a numeric ``value`` from a loaded assumption document (header vs parameters split).
+
+    :param doc: Raw YAML root mapping (e.g. QCVV or QEM document), or ``None``.
+    :param key: Parameter name.
+    :returns: Parsed float, or ``None`` if missing or not a numeric parameter entry.
+    """
+    if doc is None:
+        return None
+    _, params = _split_document(doc)
+    entry = params.get(key)
+    if not isinstance(entry, dict) or entry.get("value") is None:
+        return None
+    try:
+        return float(entry["value"])
+    except (TypeError, ValueError):
+        return None
+
+
+def _modality_characteristic_physical_gate_error_rate(modality: Mapping[str, Any]) -> float | None:
+    """Modality ``characteristic_physical_gate_error_rate.value`` when present and non-negative."""
+    entry = modality.get("characteristic_physical_gate_error_rate")
+    if not isinstance(entry, dict) or entry.get("value") is None:
+        return None
+    try:
+        v = float(entry["value"])
+    except (TypeError, ValueError):
+        return None
+    return v if v >= 0.0 else None
+
+
 def _build_system_metrics_block(
     *,
     scenario: Mapping[str, Any],
+    modality: Mapping[str, Any],
+    qcvv_doc: Mapping[str, Any] | None,
+    qem_doc: Mapping[str, Any] | None,
     reported_total_physical_qubits: float | None,
     factory_footprint_physical_qubits: float | None,
     patch_physical_per_logical: float | None,
@@ -114,6 +149,12 @@ def _build_system_metrics_block(
       ``logical_fault_model`` supplies ``p_L`` and scenario ``qec.logical_error_budget`` supplies ε.
     * **QOT** — ``max(1, parallel_ccz_paths) / τ`` in abstract-layer-proxies per second when τ exists;
       parallel width from ``schedule_model_v1`` when present else ``ccz_factory_count`` else 1.
+    * **VER** — when ``paths.qcvv`` is set: modality ``characteristic_physical_gate_error_rate`` times
+      QCVV ``effective_physical_error_rate_multiplier_from_characterization`` (QCVV-grounded proxy).
+    * **Mitigated operations ceiling** — when ``paths.qem`` is set and LOB exists:
+      ``(ε / p_L) / s / Γ`` with QEM ``effective_logical_error_rate_suppression_factor`` as ``s``
+      (``p_L`` scaled by ``s`` for budget) and ``sampling_shot_overhead_multiplier`` as ``Γ`` (≥ 1 typical).
+      Independent of ``logical_fault_model`` recompute; does not change heuristic ``d``.
     """
     _raw_qec = scenario.get("qec")
     qec_block: dict[str, Any] = _raw_qec if isinstance(_raw_qec, dict) else {}
@@ -205,6 +246,62 @@ def _build_system_metrics_block(
     else:
         notes.append("QOT omitted: need logical_cycle_time_microseconds > 0.")
 
+    ver: float | None = None
+    p_nominal = _modality_characteristic_physical_gate_error_rate(modality)
+    if qcvv_doc is not None:
+        sigma = _document_parameter_value_optional(
+            qcvv_doc, "effective_physical_error_rate_multiplier_from_characterization"
+        )
+        if p_nominal is None:
+            notes.append(
+                "VER omitted: need modality characteristic_physical_gate_error_rate for QCVV multiplier."
+            )
+        elif sigma is None:
+            notes.append(
+                "VER omitted: QCVV document missing effective_physical_error_rate_multiplier_from_characterization."
+            )
+        elif sigma <= 0.0:
+            warnings.append("system_metrics: QCVV characterization multiplier <= 0; VER omitted.")
+        else:
+            ver = float(p_nominal * sigma)
+            notes.append(
+                "VER = modality characteristic_physical_gate_error_rate × "
+                "QCVV effective_physical_error_rate_multiplier_from_characterization (scalar proxy)."
+            )
+    else:
+        notes.append("VER omitted: no paths.qcvv (QCVV profile) in scenario.")
+
+    mitigated_ceiling: float | None = None
+    if qem_doc is not None:
+        if lob is None:
+            notes.append("mitigated_operations_ceiling omitted: need LOB (logical_fault_model p_L and budget).")
+        else:
+            s_raw = _document_parameter_value_optional(
+                qem_doc, "effective_logical_error_rate_suppression_factor"
+            )
+            gamma_raw = _document_parameter_value_optional(
+                qem_doc, "sampling_shot_overhead_multiplier"
+            )
+            s_use = float(s_raw) if s_raw is not None and s_raw > 0.0 else 1.0
+            gamma_use = float(gamma_raw) if gamma_raw is not None and gamma_raw > 0.0 else 1.0
+            if s_raw is None or s_raw <= 0.0:
+                warnings.append(
+                    "system_metrics: QEM effective_logical_error_rate_suppression_factor missing or invalid; "
+                    "using 1.0 for mitigated_operations_ceiling."
+                )
+            if gamma_raw is None or gamma_raw <= 0.0:
+                warnings.append(
+                    "system_metrics: QEM sampling_shot_overhead_multiplier missing or invalid; "
+                    "using 1.0 for mitigated_operations_ceiling."
+                )
+            mitigated_ceiling = float(lob / s_use / gamma_use)
+            notes.append(
+                "mitigated_operations_ceiling = LOB / (QEM logical error suppression s) / "
+                "(sampling_shot_overhead Γ); s<1 expands depth budget vs bare LOB; Γ>1 spends it on shots."
+            )
+    else:
+        notes.append("mitigated_operations_ceiling omitted: no paths.qem (QEM profile) in scenario.")
+
     pieces = [lqc is not None, lob is not None, qot is not None]
     if all(pieces):
         status = "computed"
@@ -222,8 +319,8 @@ def _build_system_metrics_block(
         "logical_operations_budget_lob": lob,
         "headroom_logical_depth": headroom,
         "quantum_operations_throughput_qot": qot,
-        "validated_error_rate_ver": None,
-        "mitigated_operations_ceiling": None,
+        "validated_error_rate_ver": ver,
+        "mitigated_operations_ceiling": mitigated_ceiling,
     }
 
 _HEADER_KEYS = frozenset(
@@ -1339,6 +1436,9 @@ def build_scenario_report(
     )
     system_metrics_block = _build_system_metrics_block(
         scenario=scenario,
+        modality=bundle.modality,
+        qcvv_doc=bundle.qcvv,
+        qem_doc=bundle.qem,
         reported_total_physical_qubits=reported_total_physical_qubits,
         factory_footprint_physical_qubits=factory_footprint_from_yaml,
         patch_physical_per_logical=patch_physical_per_logical,
@@ -1521,6 +1621,8 @@ def report_to_markdown(report: Mapping[str, Any]) -> str:
     lines.append(f"- **LOB (ε/p_L depth proxy):** {sm.get('logical_operations_budget_lob')}\n")
     lines.append(f"- **Headroom (LOB − D):** {sm.get('headroom_logical_depth')}\n")
     lines.append(f"- **QOT (parallel width / τ, layer-proxies/s):** {sm.get('quantum_operations_throughput_qot')}\n")
+    lines.append(f"- **VER (QCVV-grounded gate error proxy):** {sm.get('validated_error_rate_ver')}\n")
+    lines.append(f"- **Mitigated operations ceiling (LOB / s / Γ):** {sm.get('mitigated_operations_ceiling')}\n")
 
     warns = report.get("warnings") or []
     if warns:

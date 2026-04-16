@@ -28,7 +28,7 @@ def test_build_report_rsa2048_parallel() -> None:
     bundle = load_scenario_bundle(scenario, root=root)
     report = build_scenario_report(bundle)
 
-    assert report["report_contract_version"] == 8
+    assert report["report_contract_version"] == 9
     pl = report["physical_layer"]
     assert pl["status"] == "passthrough_from_modality"
     assert pl["document_id"] == "superconducting_gidney_ekera_2021"
@@ -46,6 +46,8 @@ def test_build_report_rsa2048_parallel() -> None:
     assert sm["logical_qubit_capacity_lqc"] == pytest.approx(14585.0)
     assert sm["logical_qubit_capacity_lqc_method"] is not None
     assert sm["quantum_operations_throughput_qot"] == pytest.approx(28.0 / (10.0 * 1e-6))
+    assert sm["validated_error_rate_ver"] is None
+    assert sm["mitigated_operations_ceiling"] is None
     assert report["scenario"]["scenario"] == "rsa2048_gidney_ekera_2021_parallel"
     assert report["algorithm_metrics"]["n"] == 2048
 
@@ -134,7 +136,7 @@ def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
     bundle = load_scenario_bundle(scenario, root=root)
     report = build_scenario_report(bundle)
 
-    assert report["report_contract_version"] == 8
+    assert report["report_contract_version"] == 9
     assert report["physical_layer"]["status"] == "passthrough_from_modality"
     assert report["physical_layer"]["document_id"] == "superconducting_babbush_et_al_2026"
     sm_ec = report["system_metrics"]
@@ -163,6 +165,8 @@ def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
     assert sm_ec["logical_operations_budget_lob"] == pytest.approx(0.1 / float(p_l_ec))
     assert sm_ec["headroom_logical_depth"] == pytest.approx(0.1 / float(p_l_ec) - 70_000_000.0)
     assert sm_ec["quantum_operations_throughput_qot"] == pytest.approx(1.0 / (10.0 * 1e-6))
+    assert sm_ec["validated_error_rate_ver"] is None
+    assert sm_ec["mitigated_operations_ceiling"] is None
 
     dash = report["dashboard"]
     assert dash.get("ecdlp_active") is True
@@ -187,7 +191,7 @@ def test_build_report_physical_layer_cain_neutral_atom() -> None:
     bundle = load_scenario_bundle(scenario, root=root)
     report = build_scenario_report(bundle)
     pl = report["physical_layer"]
-    assert report["report_contract_version"] == 8
+    assert report["report_contract_version"] == 9
     assert pl["document_id"] == "neutral_atom_cain_et_al_2026"
     assert pl["status"] == "passthrough_from_modality"
     assert pl["parameters"]["coherence_time_t1_microseconds"]["value"] == 15000.0
@@ -219,9 +223,16 @@ def test_build_report_surfaces_qcvv_qem_layers_when_loaded() -> None:
         assert report["layers"]["qem"]["header"]["document_id"] == "qem_identity_no_overhead"
         assert report["sources"]["qcvv"]["document_id"] == "qcvv_identity_no_overhead"
         assert report["sources"]["qem"]["document_id"] == "qem_identity_no_overhead"
+        smq = report["system_metrics"]
+        assert smq["validated_error_rate_ver"] == pytest.approx(0.001)
+        lob_q = smq["logical_operations_budget_lob"]
+        assert lob_q is not None
+        assert smq["mitigated_operations_ceiling"] == pytest.approx(float(lob_q))
         md = report_to_markdown(report)
         assert "qcvv" in md
         assert "qem" in md
+        assert "VER" in md
+        assert "Mitigated operations ceiling" in md
     finally:
         scen.unlink(missing_ok=True)
 
