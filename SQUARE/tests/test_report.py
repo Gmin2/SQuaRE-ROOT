@@ -28,7 +28,7 @@ def test_build_report_rsa2048_parallel() -> None:
     bundle = load_scenario_bundle(scenario, root=root)
     report = build_scenario_report(bundle)
 
-    assert report["report_contract_version"] == 7
+    assert report["report_contract_version"] == 8
     pl = report["physical_layer"]
     assert pl["status"] == "passthrough_from_modality"
     assert pl["document_id"] == "superconducting_gidney_ekera_2021"
@@ -40,11 +40,12 @@ def test_build_report_rsa2048_parallel() -> None:
     assert lf["logical_error_rate_per_cycle"] == pytest.approx(0.05 * (0.1**13))
     assert lf["logical_cycle_time"]["logical_cycle_time_microseconds"] == 10.0
     sm = report["system_metrics"]
-    assert sm["schema"] == "system_metrics_v1"
-    assert sm["status"] == "not_computed"
-    assert sm["logical_qubit_capacity_lqc"] is None
-    assert sm["logical_operations_budget_lob"] is None
-    assert sm["quantum_operations_throughput_qot"] is None
+    assert sm["schema"] == "system_metrics_v2"
+    assert sm["status"] == "computed"
+    assert isinstance(sm["notes"], list)
+    assert sm["logical_qubit_capacity_lqc"] == pytest.approx(14585.0)
+    assert sm["logical_qubit_capacity_lqc_method"] is not None
+    assert sm["quantum_operations_throughput_qot"] == pytest.approx(28.0 / (10.0 * 1e-6))
     assert report["scenario"]["scenario"] == "rsa2048_gidney_ekera_2021_parallel"
     assert report["algorithm_metrics"]["n"] == 2048
 
@@ -74,6 +75,9 @@ def test_build_report_rsa2048_parallel() -> None:
     assert dash["factory_footprint_physical_qubits_from_yaml"] == pytest.approx(28 * 10_000.0)
 
     depth_layers = 500 * 2048**2 + 2048**2 * math.log2(2048)
+    p_l_rsa = lf["logical_error_rate_per_cycle"]
+    assert sm["logical_operations_budget_lob"] == pytest.approx(0.1 / float(p_l_rsa))
+    assert sm["headroom_logical_depth"] == pytest.approx(0.1 / float(p_l_rsa) - depth_layers)
     expected_naive_days = depth_layers * 1.0 / 1e6 / 86400.0
     assert dash["naive_serial_time_days_from_depth_times_cycle"] == pytest.approx(expected_naive_days)
 
@@ -120,7 +124,8 @@ def test_build_report_rsa2048_parallel() -> None:
     assert "Logical fault model" in md
     assert "passthrough_from_modality" in md
     assert "System metrics (OSRE)" in md
-    assert "not_computed" in md
+    assert "`computed`" in md
+    assert "system_metrics_v2" in md
 
 
 def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
@@ -129,10 +134,13 @@ def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
     bundle = load_scenario_bundle(scenario, root=root)
     report = build_scenario_report(bundle)
 
-    assert report["report_contract_version"] == 7
+    assert report["report_contract_version"] == 8
     assert report["physical_layer"]["status"] == "passthrough_from_modality"
     assert report["physical_layer"]["document_id"] == "superconducting_babbush_et_al_2026"
-    assert report["system_metrics"]["status"] == "not_computed"
+    sm_ec = report["system_metrics"]
+    assert sm_ec["schema"] == "system_metrics_v2"
+    assert sm_ec["status"] == "partial"
+    assert sm_ec["logical_qubit_capacity_lqc"] is None
     lfm = report["logical_fault_model"]
     assert lfm["status"] == "computed"
     assert lfm["exponent_half_distance"] == 11
@@ -150,6 +158,11 @@ def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
     assert ev["abstract_logical_qubits"]["value"] == 1450
     assert ev["abstract_logical_qubits"]["provenance"] == "ecdlp_envelope_fixed_problem"
     assert ev["abstract_measurement_depth_layers"]["value"] == 70_000_000.0
+
+    p_l_ec = lfm["logical_error_rate_per_cycle"]
+    assert sm_ec["logical_operations_budget_lob"] == pytest.approx(0.1 / float(p_l_ec))
+    assert sm_ec["headroom_logical_depth"] == pytest.approx(0.1 / float(p_l_ec) - 70_000_000.0)
+    assert sm_ec["quantum_operations_throughput_qot"] == pytest.approx(1.0 / (10.0 * 1e-6))
 
     dash = report["dashboard"]
     assert dash.get("ecdlp_active") is True
@@ -174,7 +187,7 @@ def test_build_report_physical_layer_cain_neutral_atom() -> None:
     bundle = load_scenario_bundle(scenario, root=root)
     report = build_scenario_report(bundle)
     pl = report["physical_layer"]
-    assert report["report_contract_version"] == 7
+    assert report["report_contract_version"] == 8
     assert pl["document_id"] == "neutral_atom_cain_et_al_2026"
     assert pl["status"] == "passthrough_from_modality"
     assert pl["parameters"]["coherence_time_t1_microseconds"]["value"] == 15000.0

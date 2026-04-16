@@ -15,7 +15,7 @@ Every report is a JSON-serializable object with at least:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `report_contract_version` | `number` | Contract version (currently `7`). |
+| `report_contract_version` | `number` | Contract version (currently `8`). |
 | `engine` | `object` | `{ "name": "square", "version": "<package version>" }`. |
 | `generated_at` | `string` | ISO-8601 UTC timestamp when the report was built. |
 | `warnings` | `array` | Human-readable strings for caveats (missing distance `d`, symbolic formulas, branch flags). |
@@ -30,7 +30,7 @@ Every report is a JSON-serializable object with at least:
 | `logical_fault_model` | `object` | Phenomenological **logical error per QEC cycle** and **logical cycle time** proxy (OSRE-style); see § `logical_fault_model`. |
 | `physical_rollup` | `object` | End-to-end **data-plane** physical qubit roll-up when both `n` and `d` are available; see below. |
 | `physical_layer` | `object` | Curated **native physical** parameters (OSRE memo alignment) copied from modality YAML; see § `physical_layer`. |
-| `system_metrics` | `object` | OSRE-style **LQC / LOB / QOT** (and related) slots; see § `system_metrics`. Numeric values are **`null`** placeholders until composed from layers. |
+| `system_metrics` | `object` | OSRE-style **LQC / LOB / QOT** (and related); see § `system_metrics`. Metrics are filled when inputs exist (`computed` / `partial`); otherwise `insufficient_inputs` with explanatory `notes`. |
 | `timing` | `object` | Table 2 pins, naive depth×cycle, optional schedule heuristic + calibration; see below. |
 | `qec_distance_resolution` | `object` | How `d` was chosen (`cli_override`, `explicit_scenario`, `heuristic_union_bound`, etc.). |
 | `layout_estimate` | `object` | Data-plane proxy, pinned end-to-end qubits, derived non-data overhead, optional YAML factory footprint; see below. |
@@ -208,21 +208,32 @@ Curated passthrough of **extended** modality parameters (T1/T2, native gate and 
 
 ## `system_metrics` (OSRE-aligned)
 
-Reserved for **system-level** quantities described in the OSRE Product Requirements Memorandum (LQC, LOB, QOT, headroom, VER, mitigated ceiling). **Contract v5+** introduces the object shape; engines **do not** compute these numbers yet unless `status` is updated by a future release.
+**System-level** quantities aligned with the OSRE Product Requirements Memorandum (LQC, LOB, QOT, headroom; VER and mitigated ceiling reserved). **Contract v8** (`system_metrics_v2`) fills **LQC**, **LOB**, **headroom**, and **QOT** from existing report inputs where possible; formulas are **proxies** (see `notes`).
+
+### Scenario inputs
+
+Optional block **`scenario.system_metrics`** (when present on the scenario YAML merged into `report.scenario`):
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `schema` | `string` | Sub-schema tag for this block (currently `system_metrics_v1`). |
-| `status` | `string` | `not_computed` until implementation fills metrics. |
-| `notes` | `string` | Human-readable scope / deferral message. |
-| `logical_qubit_capacity_lqc` | `number \| null` | Usable logical width after factories, routing, margin (**LQC**). |
-| `logical_operations_budget_lob` | `number \| null` | Logical depth budget before failure probability exceeds target (**LOB**). |
-| `quantum_operations_throughput_qot` | `number \| null` | Logical operations per unit time given cycle time and parallelism (**QOT**). |
-| `headroom_logical_depth` | `number \| null` | Margin between LOB and algorithm-required logical depth. |
-| `validated_error_rate_ver` | `number \| null` | QCVV-adjusted physical error proxy (**VER**). |
-| `mitigated_operations_ceiling` | `number \| null` | LOB expansion from QEM (sampling tradeoff), when modeled. |
+| `routing_margin_logical_qubits` | `number` | Non-negative logical slots subtracted from the LQC proxy (default `0`). |
 
-**Consumers:** Treat all nullable metrics as **absent** when `null`. Use `dashboard`, `physical_rollup`, `algorithm_metrics`, and `timing` for current headline numbers until `status` changes.
+### Block fields
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `schema` | `string` | Sub-schema tag (currently `system_metrics_v2`). |
+| `status` | `string` | `computed` if LQC, LOB, and QOT are all non-`null`; `partial` if at least one is non-`null`; `insufficient_inputs` if all three are `null`. |
+| `notes` | `array` of `string` | Caveats: missing inputs per metric and model limits. |
+| `logical_qubit_capacity_lqc` | `number \| null` | **LQC** proxy: `floor(max(0, P_total/ρ − F/ρ − margin))` when `P_total` (`layout_estimate.reported_end_to_end_physical_qubits`), factory footprint `F` (`layout_estimate.factory_footprint_physical_qubits_from_yaml`), and per-logical patch size `ρ` (`physical_qubits_per_logical`) are all valid; else `null`. |
+| `logical_qubit_capacity_lqc_method` | `string \| null` | Short formula id when LQC is computed; otherwise `null`. |
+| `logical_operations_budget_lob` | `number \| null` | **LOB** proxy: `ε / p_L` with `qec.logical_error_budget` as ε and `logical_fault_model.logical_error_rate_per_cycle` as `p_L` when `p_L > 0`; else `null`. |
+| `headroom_logical_depth` | `number \| null` | `LOB − D` when both LOB and `abstract_measurement_depth_layers` exist; else `null`. |
+| `quantum_operations_throughput_qot` | `number \| null` | **QOT** proxy: `parallel_width / τ` (abstract layer-proxies per second), with `τ` = `logical_fault_model.logical_cycle_time.logical_cycle_time_microseconds` × 10⁻⁶ s, and `parallel_width` = `max(1, timing.schedule_model_v1.ccz_factory_count)` when the schedule block exists, else `max(1, ccz_factory_count)` from Table 2 row, else `1`. |
+| `validated_error_rate_ver` | `number \| null` | QCVV-adjusted physical error proxy (**VER**); reserved (`null`). |
+| `mitigated_operations_ceiling` | `number \| null` | LOB expansion from QEM; reserved (`null`). |
+
+**Consumers:** Treat nullable metrics as **absent** when `null`. Prefer JSON over Markdown summaries; `report_to_markdown` surfaces headline LQC/LOB/QOT lines when present.
 
 ## Provenance
 
@@ -253,6 +264,7 @@ Evaluable formula strings follow **Python** syntax for powers (`**`, not `^`).
 | `2` | Adds `qec_distance_resolution`, `layout_estimate`, extended `timing`, and heuristic distance policy. |
 | `3` | Consolidated magic Table 2 (`paper_table2_rsa2048_reference_rows`) and algorithm Table 1 pins (`paper_table1_pins_by_modulus_bit_length`); dashboard adds `table2_pinned_source_parameter` / `table2_pinned_row_layout_descriptor`; `ccz_factory_parameter_key` is now the row’s `layout_descriptor`. |
 | `4` | Optional scenario `paths.qcvv` / `paths.qem`; `sources` and `layers` include `qcvv` and `qem` (or `null`) as separate stacks from `qcvv_qem`. |
-| `5` | Adds top-level `system_metrics` (OSRE LQC/LOB/QOT slots); all metric fields **`null`** and `status: not_computed` until composed roll-ups land. |
+| `5` | Adds top-level `system_metrics` (OSRE LQC/LOB/QOT slots); prior to **v8**, metric fields were **`null`** with `status: not_computed` until roll-ups landed. |
 | `6` | Adds top-level `physical_layer` — curated passthrough of OSRE extended native physical parameters from modality YAML (`passthrough_from_modality` or `no_extended_keys_in_profile`). |
 | `7` | Adds `logical_fault_model`: phenomenological logical error per cycle + logical cycle time as max(modality cycle/reaction, optional QEC decode/measurement latencies). |
+| `8` | `system_metrics` → **`system_metrics_v2`**: computed **LQC** (pinned total + YAML factory footprint + patch ρ), **LOB** / **headroom** (ε/p_L vs measurement depth), **QOT** (parallel width / τ); `notes` as `array`; optional `scenario.system_metrics.routing_margin_logical_qubits` for LQC. |

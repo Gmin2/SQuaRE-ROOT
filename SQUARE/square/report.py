@@ -6,6 +6,7 @@ Output shape is documented in ``docs/output-contract.md`` (``report_contract_ver
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Mapping
 from datetime import datetime, timezone
@@ -30,7 +31,7 @@ from square.schedule_heuristic import (
     infer_reaction_limited_from_scenario,
 )
 
-_REPORT_CONTRACT_VERSION = 7
+_REPORT_CONTRACT_VERSION = 8
 
 # Curated modality keys surfaced under top-level ``physical_layer`` (OSRE native physical layer).
 OSRE_EXTENDED_PHYSICAL_PARAMETER_KEYS: frozenset[str] = frozenset(
@@ -79,24 +80,148 @@ def _build_physical_layer_snapshot(
     }
 
 
-def _build_system_metrics_placeholder() -> dict[str, Any]:
-    """
-    OSRE-style system metrics (LQC, LOB, QOT, headroom, VER, mitigation ceiling).
+def _routing_margin_logical_qubits(scenario: Mapping[str, Any]) -> float:
+    """Optional ``scenario.system_metrics.routing_margin_logical_qubits`` (non-negative)."""
+    sm = scenario.get("system_metrics")
+    if not isinstance(sm, dict):
+        return 0.0
+    raw = sm.get("routing_margin_logical_qubits", 0.0)
+    try:
+        v = float(raw)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, v)
 
-    Contract v5+ reserves these keys; numeric composition is deferred to later phases.
-    See ``docs/output-contract.md`` § ``system_metrics``.
+
+def _build_system_metrics_block(
+    *,
+    scenario: Mapping[str, Any],
+    reported_total_physical_qubits: float | None,
+    factory_footprint_physical_qubits: float | None,
+    patch_physical_per_logical: float | None,
+    logical_fault_model: Mapping[str, Any],
+    evaluated: Mapping[str, Any],
+    schedule_model_v1: Mapping[str, Any] | None,
+    ccz_factory_count: int | None,
+    warnings: list[str],
+) -> dict[str, Any]:
     """
+    OSRE-style **LQC**, **LOB**, **QOT**, and related slots when inputs exist.
+
+    * **LQC** — only when Table-2-scale ``reported_total_physical_qubits``, magic factory footprint,
+      and patch ``physical_qubits_per_logical`` are all available; else ``null`` + doc string.
+    * **LOB / headroom** — linear proxy ``ε / p_L`` vs ``abstract_measurement_depth_layers`` when
+      ``logical_fault_model`` supplies ``p_L`` and scenario ``qec.logical_error_budget`` supplies ε.
+    * **QOT** — ``max(1, parallel_ccz_paths) / τ`` in abstract-layer-proxies per second when τ exists;
+      parallel width from ``schedule_model_v1`` when present else ``ccz_factory_count`` else 1.
+    """
+    _raw_qec = scenario.get("qec")
+    qec_block: dict[str, Any] = _raw_qec if isinstance(_raw_qec, dict) else {}
+    try:
+        logical_error_budget = float(qec_block.get("logical_error_budget", 0.1))
+    except (TypeError, ValueError):
+        logical_error_budget = 0.1
+        warnings.append("system_metrics: qec.logical_error_budget invalid; using 0.1 for LOB.")
+
+    notes: list[str] = []
+
+    lqc: float | None = None
+    lqc_method: str | None = None
+    if (
+        reported_total_physical_qubits is not None
+        and reported_total_physical_qubits > 0
+        and factory_footprint_physical_qubits is not None
+        and factory_footprint_physical_qubits >= 0
+        and patch_physical_per_logical is not None
+        and patch_physical_per_logical > 0
+    ):
+        slots_raw = reported_total_physical_qubits / patch_physical_per_logical
+        slots_factory = factory_footprint_physical_qubits / patch_physical_per_logical
+        margin = _routing_margin_logical_qubits(scenario)
+        lqc = float(math.floor(max(0.0, slots_raw - slots_factory - margin)))
+        lqc_method = (
+            "floor((reported_end_to_end_physical_qubits - factory_footprint_physical_qubits) "
+            "/ physical_qubits_per_logical - routing_margin_logical_qubits)"
+        )
+        notes.append(
+            "LQC is a logical-slot proxy from pinned total physical qubits and YAML factory footprint; "
+            "routing is only subtracted when scenario.system_metrics.routing_margin_logical_qubits is set."
+        )
+    else:
+        notes.append(
+            "LQC omitted: need reported_end_to_end_physical_qubits (e.g. Table 2 RSA pin), "
+            "factory_footprint_physical_qubits_from_yaml, and evaluated physical_qubits_per_logical."
+        )
+
+    p_l = logical_fault_model.get("logical_error_rate_per_cycle")
+    depth_entry = evaluated.get("abstract_measurement_depth_layers")
+    d_layers: float | None = None
+    if isinstance(depth_entry, dict) and depth_entry.get("value") is not None:
+        try:
+            d_layers = float(depth_entry["value"])
+        except (TypeError, ValueError):
+            d_layers = None
+
+    lob: float | None = None
+    headroom: float | None = None
+    if isinstance(p_l, (int, float)) and p_l > 0 and logical_error_budget > 0:
+        lob = float(logical_error_budget / float(p_l))
+        notes.append(
+            "LOB uses linear proxy D_max ≈ ε / p_L with scenario qec.logical_error_budget as ε "
+            "and phenomenological p_L from logical_fault_model (same family as heuristic distance)."
+        )
+        if d_layers is not None:
+            headroom = float(lob - d_layers)
+    else:
+        notes.append("LOB/headroom omitted: need positive logical_error_rate_per_cycle and budget.")
+
+    tau_us: float | None = None
+    lct = logical_fault_model.get("logical_cycle_time")
+    if isinstance(lct, dict):
+        raw_t = lct.get("logical_cycle_time_microseconds")
+        if isinstance(raw_t, (int, float)) and raw_t > 0:
+            tau_us = float(raw_t)
+
+    parallel = 1
+    if isinstance(schedule_model_v1, dict):
+        try:
+            parallel = max(1, int(schedule_model_v1.get("ccz_factory_count", 1)))
+        except (TypeError, ValueError):
+            parallel = 1
+    elif ccz_factory_count is not None:
+        try:
+            parallel = max(1, int(ccz_factory_count))
+        except (TypeError, ValueError):
+            parallel = 1
+
+    qot: float | None = None
+    if tau_us is not None and tau_us > 0:
+        tau_s = tau_us * 1e-6
+        qot = float(parallel) / tau_s
+        notes.append(
+            "QOT is abstract-depth-proxies per wall-clock second: parallel_width / τ with τ from "
+            "logical_fault_model and width from schedule_model_v1.ccz_factory_count or scenario CCZ count."
+        )
+    else:
+        notes.append("QOT omitted: need logical_cycle_time_microseconds > 0.")
+
+    pieces = [lqc is not None, lob is not None, qot is not None]
+    if all(pieces):
+        status = "computed"
+    elif any(pieces):
+        status = "partial"
+    else:
+        status = "insufficient_inputs"
+
     return {
-        "schema": "system_metrics_v1",
-        "status": "not_computed",
-        "notes": (
-            "Placeholder for OSRE Product Requirements Memorandum metrics. "
-            "Future releases will populate LQC/LOB/QOT from composed physical, QEC, magic, and algorithm layers."
-        ),
-        "logical_qubit_capacity_lqc": None,
-        "logical_operations_budget_lob": None,
-        "quantum_operations_throughput_qot": None,
-        "headroom_logical_depth": None,
+        "schema": "system_metrics_v2",
+        "status": status,
+        "notes": notes,
+        "logical_qubit_capacity_lqc": lqc,
+        "logical_qubit_capacity_lqc_method": lqc_method,
+        "logical_operations_budget_lob": lob,
+        "headroom_logical_depth": headroom,
+        "quantum_operations_throughput_qot": qot,
         "validated_error_rate_ver": None,
         "mitigated_operations_ceiling": None,
     }
@@ -1206,6 +1331,24 @@ def build_scenario_report(
         ecdlp_block=ecdlp_block_for_metrics,
     )
 
+    lfm = _build_logical_fault_model_block(
+        distance_d=d_resolved,
+        modality=bundle.modality,
+        qec=bundle.qec,
+        warnings=warnings,
+    )
+    system_metrics_block = _build_system_metrics_block(
+        scenario=scenario,
+        reported_total_physical_qubits=reported_total_physical_qubits,
+        factory_footprint_physical_qubits=factory_footprint_from_yaml,
+        patch_physical_per_logical=patch_physical_per_logical,
+        logical_fault_model=lfm,
+        evaluated=evaluated,
+        schedule_model_v1=schedule_model_v1,
+        ccz_factory_count=ccz_count,
+        warnings=warnings,
+    )
+
     report: dict[str, Any] = {
         "report_contract_version": _REPORT_CONTRACT_VERSION,
         "engine": {"name": "square", "version": _engine_version()},
@@ -1242,18 +1385,13 @@ def build_scenario_report(
                 **(qec_patch_eval_meta or {}),
             }
         },
-        "logical_fault_model": _build_logical_fault_model_block(
-            distance_d=d_resolved,
-            modality=bundle.modality,
-            qec=bundle.qec,
-            warnings=warnings,
-        ),
+        "logical_fault_model": lfm,
         "physical_rollup": physical_rollup,
         "physical_layer": _build_physical_layer_snapshot(
             modality_p,
             document_id=modality_h.get("document_id"),
         ),
-        "system_metrics": _build_system_metrics_placeholder(),
+        "system_metrics": system_metrics_block,
         "qec_distance_resolution": qec_distance_resolution,
         "layout_estimate": layout_estimate,
         "layout_optimization": layout_optimization,
@@ -1378,10 +1516,11 @@ def report_to_markdown(report: Mapping[str, Any]) -> str:
 
     sm = report.get("system_metrics") or {}
     lines.append("\n## System metrics (OSRE)\n")
-    lines.append(
-        f"- **Status:** `{sm.get('status')}` — LQC/LOB/QOT/headroom/VER reserved for future computation "
-        f"(contract v{report.get('report_contract_version')}).\n"
-    )
+    lines.append(f"- **Status:** `{sm.get('status')}` · **schema** `{sm.get('schema')}`\n")
+    lines.append(f"- **LQC (logical qubit capacity proxy):** {sm.get('logical_qubit_capacity_lqc')}\n")
+    lines.append(f"- **LOB (ε/p_L depth proxy):** {sm.get('logical_operations_budget_lob')}\n")
+    lines.append(f"- **Headroom (LOB − D):** {sm.get('headroom_logical_depth')}\n")
+    lines.append(f"- **QOT (parallel width / τ, layer-proxies/s):** {sm.get('quantum_operations_throughput_qot')}\n")
 
     warns = report.get("warnings") or []
     if warns:
