@@ -21,6 +21,7 @@ class MonteCarloStudySpec:
     scope: str
     base_scenario: str
     parameters: list[dict[str, Any]]
+    sampling_strategy: str = "independent"
 
 
 def load_monte_carlo_study_spec(
@@ -70,6 +71,21 @@ def load_monte_carlo_study_spec(
             )
         validate_distribution_spec(block)
 
+    sampling_strategy = "independent"
+    raw_s = raw.get("sampling")
+    if isinstance(raw_s, dict):
+        s = str(raw_s.get("strategy", "independent")).strip().lower()
+        if s in ("independent", "latin_hypercube"):
+            sampling_strategy = s
+        else:
+            raise ValueError(f"Unknown sampling.strategy {s!r}; use independent or latin_hypercube.")
+    elif raw.get("sampling_strategy") is not None:
+        s = str(raw["sampling_strategy"]).strip().lower()
+        if s in ("independent", "latin_hypercube"):
+            sampling_strategy = s
+        else:
+            raise ValueError(f"Unknown sampling_strategy {s!r}.")
+
     return MonteCarloStudySpec(
         schema_version=schema_version,
         study_id=study_id,
@@ -77,4 +93,5 @@ def load_monte_carlo_study_spec(
         scope=scope,
         base_scenario=str(base_scenario).strip(),
         parameters=list(params),
+        sampling_strategy=sampling_strategy,
     )

@@ -56,6 +56,19 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="SQuaRE project root (directory with Assumptions/Schemas.yaml); auto-detected if omitted.",
     )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=1,
+        metavar="J",
+        help="Thread-pool workers for forward evaluations (default: 1).",
+    )
+    parser.add_argument(
+        "--sampling",
+        choices=("independent", "latin_hypercube"),
+        default=None,
+        help="Override study YAML sampling.strategy (latin_hypercube requires all uniform parameters).",
+    )
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
     root = args.root.resolve() if args.root is not None else find_square_root(Path(__file__))
@@ -76,6 +89,8 @@ def main(argv: list[str] | None = None) -> int:
         n_samples=args.samples,
         seed=args.seed,
         include_full_report=False,
+        n_jobs=max(1, args.jobs),
+        sampling_strategy=args.sampling,
     )
 
     out_csv = args.output_csv
@@ -89,5 +104,6 @@ def main(argv: list[str] | None = None) -> int:
     write_mc_summary_json(out_json, result.summary)
 
     print(f"Wrote {len(result.rows)} rows -> {out_csv.resolve()}")
-    print(f"Wrote quantile summary -> {out_json.resolve()}")
+    print(f"Wrote summary (quantiles, moments, correlations) -> {out_json.resolve()}")
+    print(f"sampling_strategy={result.summary.get('sampling_strategy')} n_jobs={result.summary.get('n_jobs')}")
     return 0

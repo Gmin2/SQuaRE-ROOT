@@ -2,9 +2,12 @@
 
 ## Purpose
 
-Sample uncertain parameters **θ** from priors declared in a study YAML, evaluate the deterministic forward model **f(θ, scenario)** once per draw, and aggregate **CSV samples** plus **p05 / p50 / p95** summaries.
+Sample uncertain parameters **θ** from priors in a study YAML, evaluate the deterministic forward model **f(θ, scenario)** once per draw, and aggregate:
 
-**Scope:** prior predictive only (no experimental likelihood / posterior in this slice).
+- Per-sample **CSV**
+- JSON **summary**: **quantiles** (p05 / p50 / p95), **moments** (mean, std, min, max), pairwise **Pearson correlations** among metric columns (complete rows only)
+
+**Scope:** prior predictive only (no experimental likelihood / posterior here).
 
 ## Forward model
 
@@ -14,25 +17,37 @@ Sample uncertain parameters **θ** from priors declared in a study YAML, evaluat
 ## Study YAML
 
 - ``base_scenario``: path under SQuaRE root to a scenario file.
-- ``parameters``: list of blocks with ``parameter_key`` and ``distribution`` (`uniform`, `log_uniform`, `fixed`).
+- ``parameters``: blocks with ``parameter_key`` and ``distribution`` (`uniform`, `log_uniform`, `fixed`).
+- Optional ``sampling: { strategy: independent | latin_hypercube }`` (or top-level ``sampling_strategy``).
 
-Example: ``Configs/monte_carlo_study_ecdlp_example.yaml``.
+**Latin hypercube** reduces variance for **uniform** marginals only: **every** parameter must be `distribution: uniform`. Example: ``Configs/monte_carlo_study_ecdlp_lhs.yaml``. For log-spaced positive quantities, keep **independent** sampling and use ``log_uniform`` per parameter.
 
 ## Sampling loop
 
-- :func:`square.mc.run_monte_carlo_study` — ``n_samples`` draws; independent marginals per parameter.
+- :func:`square.mc.run_monte_carlo_study` — builds θ list (independent or LHS), evaluates forward model.
+- ``n_jobs > 1`` — thread pool over evaluations (shared bundle; see ``square/mc/README.md`` for GIL caveats).
 - :func:`square.mc.write_mc_samples_csv` / :func:`square.mc.write_mc_summary_json` — export.
 
 ## CLI
 
-From the ``SQUARE/`` directory (or pass ``--root``):
+From ``SQUARE/`` (or pass ``--root``):
 
 ```bash
 square-mc Configs/monte_carlo_study_ecdlp_example.yaml --samples 200 --seed 42
+square-mc Configs/monte_carlo_study_ecdlp_lhs.yaml --samples 100 --jobs 4
+square-mc Configs/monte_carlo_study_ecdlp_example.yaml --samples 50 --sampling latin_hypercube
 ```
 
-Writes ``mc_samples_<study_id>.csv`` and ``mc_summary_<study_id>.json`` in the current working directory unless ``--output-csv`` / ``--summary-json`` are set.
+Writes ``mc_samples_<study_id>.csv`` and ``mc_summary_<study_id>.json`` in the cwd unless ``--output-csv`` / ``--summary-json`` are set.
+
+## Demo script
+
+```bash
+python scripts/mc_demo.py
+```
+
+Optional histogram: ``SQUARE_MC_PLOT=1 python scripts/mc_demo.py`` (requires ``matplotlib``).
 
 ## Future work
 
-Correlated priors, Sobol indices, and posterior updates are out of scope for this module.
+Correlated priors (Gaussian copula), quasi-Monte Carlo (Sobol), process-pool parallelism, posterior updates.

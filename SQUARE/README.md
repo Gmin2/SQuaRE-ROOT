@@ -38,7 +38,7 @@ New YAML contributions must satisfy `Schemas.yaml` (document header + provenance
 
 The **output contract** for machine-readable reports is `docs/output-contract.md` (`report_contract_version`).
 
-**Monte Carlo (prior predictive):** `docs/monte_carlo.md`, module `square.mc`. After `pip install -e .`, run e.g. `square-mc Configs/monte_carlo_study_ecdlp_example.yaml --samples 100 --seed 42` from `SQUARE/` to write per-sample CSV and a JSON quantile summary (`p05` / `p50` / `p95`).
+**Monte Carlo (prior predictive):** `docs/monte_carlo.md`, `square/mc/README.md`, module `square.mc`. After `pip install -e .`: `square-mc Configs/monte_carlo_study_ecdlp_example.yaml --samples 100 --seed 42` (add `--jobs 4` for threaded runs; LHS example: `Configs/monte_carlo_study_ecdlp_lhs.yaml`). Demo: `python scripts/mc_demo.py`.
 
 Reports include:
 

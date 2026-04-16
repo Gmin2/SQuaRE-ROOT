@@ -1,7 +1,8 @@
 """
-Monte Carlo sampling loop: draw θ, evaluate forward model, CSV + quantile summary.
+Monte Carlo sampling loop: draw θ, evaluate forward model, CSV + rich summary.
 
-Uses independent marginals per study YAML parameter block (joint correlation is a future extension).
+Supports independent marginals, Latin hypercube (uniform parameters only), and optional
+parallel evaluation via :class:`concurrent.futures.ThreadPoolExecutor` (shared in-memory bundle).
 """
 
 from __future__ import annotations
@@ -9,12 +10,14 @@ from __future__ import annotations
 import csv
 import json
 import random
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
 from square.loader import ScenarioBundle
 from square.mc.forward_model import evaluate_forward_model
+from square.mc.lhs import all_blocks_uniform_for_lhs, generate_lhs_uniform_thetas
 from square.mc.parameters import sample_parameter_value
 from square.mc.study_spec import MonteCarloStudySpec
 
@@ -31,7 +34,6 @@ class MonteCarloRunResult:
 
 
 def _linear_quantile(sorted_vals: list[float], q: float) -> float:
-    """Linear interpolation quantile; ``q`` in [0, 1]."""
     if not sorted_vals:
         return float("nan")
     n = len(sorted_vals)
@@ -71,6 +73,103 @@ def _quantile_summary_for_columns(
     return out
 
 
+def _moment_summary_for_columns(
+    rows: list[Mapping[str, Any]],
+    columns: list[str],
+) -> dict[str, dict[str, float]]:
+    out: dict[str, dict[str, float]] = {}
+    for col in columns:
+        vals: list[float] = []
+        for r in rows:
+            v = r.get(col)
+            if v is None:
+                continue
+            try:
+                vals.append(float(v))
+            except (TypeError, ValueError):
+                continue
+        n = len(vals)
+        if n == 0:
+            out[col] = {}
+            continue
+        mean = sum(vals) / n
+        if n > 1:
+            var = sum((v - mean) ** 2 for v in vals) / (n - 1)
+            std = var**0.5
+        else:
+            std = 0.0
+        out[col] = {
+            "n": float(n),
+            "mean": mean,
+            "std": std,
+            "min": min(vals),
+            "max": max(vals),
+        }
+    return out
+
+
+def _pearson(xs: list[float], ys: list[float]) -> float | None:
+    n = len(xs)
+    if n < 2 or len(ys) != n:
+        return None
+    mx = sum(xs) / n
+    my = sum(ys) / n
+    num = sum((xs[i] - mx) * (ys[i] - my) for i in range(n))
+    denx = sum((xs[i] - mx) ** 2 for i in range(n)) ** 0.5
+    deny = sum((ys[i] - my) ** 2 for i in range(n)) ** 0.5
+    if denx == 0.0 or deny == 0.0:
+        return None
+    return num / (denx * deny)
+
+
+def _pairwise_correlations(
+    rows: list[Mapping[str, Any]],
+    columns: list[str],
+) -> dict[str, dict[str, float | None]]:
+    """Pearson correlation for columns that have numeric values on every row."""
+    series: dict[str, list[float]] = {}
+    for col in columns:
+        vals: list[float] = []
+        ok = True
+        for r in rows:
+            v = r.get(col)
+            if v is None:
+                ok = False
+                break
+            try:
+                vals.append(float(v))
+            except (TypeError, ValueError):
+                ok = False
+                break
+        if ok and len(vals) >= 2:
+            series[col] = vals
+    keys = sorted(series)
+    out: dict[str, dict[str, float | None]] = {}
+    for a in keys:
+        out[a] = {}
+        for b in keys:
+            if a == b:
+                out[a][b] = 1.0
+            else:
+                out[a][b] = _pearson(series[a], series[b])
+    return out
+
+
+def _build_theta_list_independent(
+    param_blocks: list[dict[str, Any]],
+    n_samples: int,
+    rng: random.Random,
+) -> list[dict[str, float]]:
+    out: list[dict[str, float]] = []
+    for _ in range(n_samples):
+        theta: dict[str, float] = {}
+        for block in param_blocks:
+            key = str(block["parameter_key"]).strip()
+            theta[key] = sample_parameter_value(block, rng)
+        out.append(theta)
+    return out
+
+
 def run_monte_carlo_study(
     spec: MonteCarloStudySpec,
     bundle: ScenarioBundle,
@@ -78,40 +177,62 @@ def run_monte_carlo_study(
     n_samples: int,
     seed: int,
     include_full_report: bool = False,
+    n_jobs: int = 1,
+    sampling_strategy: str | None = None,
 ) -> MonteCarloRunResult:
     """
-    Draw ``n_samples`` independent θ vectors (one draw per parameter per sample), evaluate ``f(θ)``.
+    Draw ``n_samples`` θ vectors and evaluate the forward model per draw.
 
-    :param spec: Loaded study (priors).
-    :param bundle: Base scenario bundle (from ``spec.base_scenario``).
-    :param n_samples: Number of Monte Carlo draws (>= 1).
-    :param seed: RNG seed for reproducibility.
-    :param include_full_report: If True, keeps full JSON report per sample (memory-heavy).
+    :param sampling_strategy: ``independent`` | ``latin_hypercube``. If ``None``, use
+        ``spec.sampling_strategy``. Latin hypercube requires **all** parameters to use
+        ``distribution: uniform``.
+    :param n_jobs: If > 1, evaluate forward model with a thread pool (GIL-limited but avoids
+        reloading YAML per thread). Use ~CPU count for large ``n_samples``.
     """
     if n_samples < 1:
         raise ValueError("n_samples must be >= 1.")
+    if n_jobs < 1:
+        raise ValueError("n_jobs must be >= 1.")
+
+    strategy = (sampling_strategy or spec.sampling_strategy).strip().lower()
+    if strategy not in ("independent", "latin_hypercube"):
+        raise ValueError(f"Unknown sampling_strategy {strategy!r}.")
 
     rng = random.Random(seed)
     param_blocks = spec.parameters
     param_keys = [str(b["parameter_key"]).strip() for b in param_blocks]
 
-    rows: list[dict[str, Any]] = []
-    for i in range(n_samples):
-        theta: dict[str, float] = {}
-        for block in param_blocks:
-            key = str(block["parameter_key"]).strip()
-            theta[key] = sample_parameter_value(block, rng)
-        result = evaluate_forward_model(
+    if strategy == "latin_hypercube":
+        if not all_blocks_uniform_for_lhs(param_blocks):
+            raise ValueError(
+                "latin_hypercube requires every parameter block to use distribution: uniform."
+            )
+        theta_list = generate_lhs_uniform_thetas(param_blocks, n_samples, rng)
+    else:
+        theta_list = _build_theta_list_independent(param_blocks, n_samples, rng)
+
+    def _eval_one(theta: dict[str, float]) -> dict[str, float | None]:
+        return evaluate_forward_model(
             bundle,
             numeric_overrides=theta,
             include_full_report=include_full_report,
-        )
-        row: dict[str, Any] = {"sample_index": i, **theta, **result.metrics}
-        rows.append(row)
+        ).metrics
+
+    if n_jobs == 1:
+        metrics_list = [_eval_one(th) for th in theta_list]
+    else:
+        with ThreadPoolExecutor(max_workers=n_jobs) as ex:
+            metrics_list = list(ex.map(_eval_one, theta_list))
+
+    rows: list[dict[str, Any]] = []
+    for i, (theta, metrics) in enumerate(zip(theta_list, metrics_list, strict=True)):
+        rows.append({"sample_index": i, **theta, **metrics})
 
     metric_keys = [k for k in rows[0] if k not in ("sample_index",) and k not in param_keys]
     summary_columns = param_keys + metric_keys
     quantiles = _quantile_summary_for_columns(rows, summary_columns)
+    moments = _moment_summary_for_columns(rows, summary_columns)
+    correlations = _pairwise_correlations(rows, metric_keys)
 
     summary: dict[str, Any] = {
         "study_id": spec.study_id,
@@ -119,9 +240,13 @@ def run_monte_carlo_study(
         "scope": spec.scope,
         "n_samples": n_samples,
         "seed": seed,
+        "sampling_strategy": strategy,
+        "n_jobs": n_jobs,
         "parameter_keys": param_keys,
         "metric_keys": metric_keys,
         "quantiles": quantiles,
+        "moments": moments,
+        "correlations": correlations,
     }
 
     return MonteCarloRunResult(
@@ -134,7 +259,6 @@ def run_monte_carlo_study(
 
 
 def write_mc_samples_csv(path: str | Path, rows: list[dict[str, Any]]) -> None:
-    """Write sample rows to CSV (all keys unioned as columns)."""
     if not rows:
         Path(path).write_text("sample_index\n", encoding="utf-8")
         return

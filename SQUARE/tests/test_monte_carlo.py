@@ -53,6 +53,7 @@ def test_load_study_spec_relative() -> None:
     spec = load_monte_carlo_study_spec("Configs/monte_carlo_study_ecdlp_example.yaml")
     assert spec.study_id == "mc_ecdlp_gate_and_cycle_priors"
     assert len(spec.parameters) == 3
+    assert spec.sampling_strategy == "independent"
 
 
 def test_sample_parameter_reproducible() -> None:
@@ -78,6 +79,51 @@ def test_run_monte_carlo_study_small() -> None:
     q = result.summary["quantiles"]
     assert "naive_serial_time_days" in q
     assert "p50" in q["naive_serial_time_days"]
+    assert "moments" in result.summary
+    assert "mean" in result.summary["moments"]["naive_serial_time_days"]
+    assert "correlations" in result.summary
+
+
+def test_latin_hypercube_requires_all_uniform() -> None:
+    root = find_square_root()
+    spec = load_monte_carlo_study_spec(
+        root / "Configs" / "monte_carlo_study_ecdlp_example.yaml",
+        root=root,
+    )
+    bundle = load_scenario_bundle(root / spec.base_scenario, root=root)
+    with pytest.raises(ValueError, match="latin_hypercube requires"):
+        run_monte_carlo_study(
+            spec,
+            bundle,
+            n_samples=4,
+            seed=1,
+            include_full_report=False,
+            sampling_strategy="latin_hypercube",
+        )
+
+
+def test_latin_hypercube_study_runs() -> None:
+    root = find_square_root()
+    spec = load_monte_carlo_study_spec(root / "Configs" / "monte_carlo_study_ecdlp_lhs.yaml", root=root)
+    assert spec.sampling_strategy == "latin_hypercube"
+    bundle = load_scenario_bundle(root / spec.base_scenario, root=root)
+    result = run_monte_carlo_study(spec, bundle, n_samples=12, seed=99, include_full_report=False)
+    assert len(result.rows) == 12
+    assert result.summary["sampling_strategy"] == "latin_hypercube"
+
+
+def test_monte_carlo_parallel_threads() -> None:
+    root = find_square_root()
+    spec = load_monte_carlo_study_spec(
+        root / "Configs" / "monte_carlo_study_ecdlp_example.yaml",
+        root=root,
+    )
+    bundle = load_scenario_bundle(root / spec.base_scenario, root=root)
+    result = run_monte_carlo_study(
+        spec, bundle, n_samples=6, seed=2, include_full_report=False, n_jobs=2
+    )
+    assert len(result.rows) == 6
+    assert result.summary["n_jobs"] == 2
 
 
 def test_write_csv_and_summary_roundtrip(tmp_path: Path) -> None:
