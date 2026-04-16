@@ -15,7 +15,7 @@ Every report is a JSON-serializable object with at least:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `report_contract_version` | `number` | Contract version (currently `5`). |
+| `report_contract_version` | `number` | Contract version (currently `6`). |
 | `engine` | `object` | `{ "name": "square", "version": "<package version>" }`. |
 | `generated_at` | `string` | ISO-8601 UTC timestamp when the report was built. |
 | `warnings` | `array` | Human-readable strings for caveats (missing distance `d`, symbolic formulas, branch flags). |
@@ -28,7 +28,8 @@ Every report is a JSON-serializable object with at least:
 | `dashboard` | `object` | Cross-layer headline numbers for quick comparison (may include `null` where data is missing). |
 | `qec_overhead` | `object` | Slots for code-distance-dependent overhead (e.g. patch qubit formula + `d`); see below. |
 | `physical_rollup` | `object` | End-to-end **data-plane** physical qubit roll-up when both `n` and `d` are available; see below. |
-| `system_metrics` | `object` | OSRE-style **LQC / LOB / QOT** (and related) slots; see § `system_metrics`. As of v5, numeric values are **`null`** placeholders until composed from layers. |
+| `physical_layer` | `object` | Curated **native physical** parameters (OSRE memo alignment) copied from modality YAML; see § `physical_layer`. |
+| `system_metrics` | `object` | OSRE-style **LQC / LOB / QOT** (and related) slots; see § `system_metrics`. Numeric values are **`null`** placeholders until composed from layers. |
 | `timing` | `object` | Table 2 pins, naive depth×cycle, optional schedule heuristic + calibration; see below. |
 | `qec_distance_resolution` | `object` | How `d` was chosen (`cli_override`, `explicit_scenario`, `heuristic_union_bound`, etc.). |
 | `layout_estimate` | `object` | Data-plane proxy, pinned end-to-end qubits, derived non-data overhead, optional YAML factory footprint; see below. |
@@ -174,9 +175,23 @@ Present when patch formula, logical qubits, measurement depth, and physical gate
 | `approximate_data_plane_physical_qubits` | Product when both factors exist; mirrors `dashboard.approximate_data_plane_physical_qubits`. |
 | `patch_formula_status` | Same string as `qec_overhead...status`. |
 
+## `physical_layer` (OSRE native physical)
+
+Curated passthrough of **extended** modality parameters (T1/T2, native gate and readout errors, idle proxy, correlated-noise multiplier, leakage proxy) that follow the OSRE memo’s physical-layer checklist. Only keys listed below are copied from `layers.modality.parameters`; the full modality map remains authoritative.
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `schema` | `string` | Sub-schema tag (currently `physical_layer_v1`). |
+| `document_id` | `string \| null` | Modality `document_id` for traceability. |
+| `status` | `string` | `passthrough_from_modality` when at least one extended key is present; otherwise `no_extended_keys_in_profile`. |
+| `parameter_keys` | `array` | Sorted list of keys included in `parameters`. |
+| `parameters` | `object` | Map of parameter name → full YAML `parameter_entry` (same shape as under `layers.modality.parameters`). |
+
+**Canonical key set** (when present in modality YAML): `coherence_time_t1_microseconds`, `coherence_time_t2_microseconds`, `single_qubit_gate_error_rate`, `two_qubit_gate_error_rate`, `measurement_error_rate`, `idle_error_rate_per_cycle`, `correlated_noise_parameter`, `leakage_error_rate`.
+
 ## `system_metrics` (OSRE-aligned)
 
-Reserved for **system-level** quantities described in the OSRE Product Requirements Memorandum (LQC, LOB, QOT, headroom, VER, mitigated ceiling). **Contract v5** introduces the object shape; engines **do not** compute these numbers yet unless `status` is updated by a future release.
+Reserved for **system-level** quantities described in the OSRE Product Requirements Memorandum (LQC, LOB, QOT, headroom, VER, mitigated ceiling). **Contract v5+** introduces the object shape; engines **do not** compute these numbers yet unless `status` is updated by a future release.
 
 | Key | Type | Description |
 |-----|------|-------------|
@@ -222,3 +237,4 @@ Evaluable formula strings follow **Python** syntax for powers (`**`, not `^`).
 | `3` | Consolidated magic Table 2 (`paper_table2_rsa2048_reference_rows`) and algorithm Table 1 pins (`paper_table1_pins_by_modulus_bit_length`); dashboard adds `table2_pinned_source_parameter` / `table2_pinned_row_layout_descriptor`; `ccz_factory_parameter_key` is now the row’s `layout_descriptor`. |
 | `4` | Optional scenario `paths.qcvv` / `paths.qem`; `sources` and `layers` include `qcvv` and `qem` (or `null`) as separate stacks from `qcvv_qem`. |
 | `5` | Adds top-level `system_metrics` (OSRE LQC/LOB/QOT slots); all metric fields **`null`** and `status: not_computed` until composed roll-ups land. |
+| `6` | Adds top-level `physical_layer` — curated passthrough of OSRE extended native physical parameters from modality YAML (`passthrough_from_modality` or `no_extended_keys_in_profile`). |

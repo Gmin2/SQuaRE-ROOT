@@ -27,14 +27,60 @@ from square.schedule_heuristic import (
     infer_reaction_limited_from_scenario,
 )
 
-_REPORT_CONTRACT_VERSION = 5
+_REPORT_CONTRACT_VERSION = 6
+
+# Curated modality keys surfaced under top-level ``physical_layer`` (OSRE native physical layer).
+OSRE_EXTENDED_PHYSICAL_PARAMETER_KEYS: frozenset[str] = frozenset(
+    {
+        "coherence_time_t1_microseconds",
+        "coherence_time_t2_microseconds",
+        "single_qubit_gate_error_rate",
+        "two_qubit_gate_error_rate",
+        "measurement_error_rate",
+        "idle_error_rate_per_cycle",
+        "correlated_noise_parameter",
+        "leakage_error_rate",
+    }
+)
+
+
+def _build_physical_layer_snapshot(
+    modality_parameters: Mapping[str, Any],
+    *,
+    document_id: Any,
+) -> dict[str, Any]:
+    """
+    Passthrough of extended physical parameters from modality YAML into a stable report envelope.
+
+    Full modality parameters remain under ``layers.modality.parameters``; this block duplicates only
+    OSRE-aligned keys for tooling. See ``docs/output-contract.md`` § ``physical_layer``.
+    """
+    picked: dict[str, Any] = {}
+    for key in OSRE_EXTENDED_PHYSICAL_PARAMETER_KEYS:
+        entry = modality_parameters.get(key)
+        if isinstance(entry, dict):
+            picked[key] = entry
+    doc_raw = document_id
+    doc_id: str | None = (
+        str(doc_raw).strip()
+        if doc_raw is not None and str(doc_raw).strip()
+        else None
+    )
+    status = "passthrough_from_modality" if picked else "no_extended_keys_in_profile"
+    return {
+        "schema": "physical_layer_v1",
+        "document_id": doc_id,
+        "status": status,
+        "parameter_keys": sorted(picked.keys()),
+        "parameters": picked,
+    }
 
 
 def _build_system_metrics_placeholder() -> dict[str, Any]:
     """
     OSRE-style system metrics (LQC, LOB, QOT, headroom, VER, mitigation ceiling).
 
-    Contract v5 reserves these keys; numeric composition is deferred to later phases.
+    Contract v5+ reserves these keys; numeric composition is deferred to later phases.
     See ``docs/output-contract.md`` § ``system_metrics``.
     """
     return {
@@ -1071,6 +1117,10 @@ def build_scenario_report(
             }
         },
         "physical_rollup": physical_rollup,
+        "physical_layer": _build_physical_layer_snapshot(
+            modality_p,
+            document_id=modality_h.get("document_id"),
+        ),
         "system_metrics": _build_system_metrics_placeholder(),
         "qec_distance_resolution": qec_distance_resolution,
         "layout_estimate": layout_estimate,
@@ -1176,6 +1226,13 @@ def report_to_markdown(report: Mapping[str, Any]) -> str:
         f"- **Table2 / schedule_model_v1 ratio:** {dash.get('schedule_calibration_ratio_table2_over_model_v1')}\n"
     )
     lines.append(f"- **T-factory fallback flagged:** {dash.get('t_factory_fallback_recommended')}\n")
+
+    pl = report.get("physical_layer") or {}
+    lines.append("\n## Physical layer (OSRE snapshot)\n")
+    lines.append(
+        f"- **Status:** `{pl.get('status')}` · **document_id** `{pl.get('document_id')}` · "
+        f"**extended keys** {pl.get('parameter_keys')}\n"
+    )
 
     sm = report.get("system_metrics") or {}
     lines.append("\n## System metrics (OSRE)\n")

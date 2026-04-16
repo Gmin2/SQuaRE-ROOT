@@ -103,6 +103,7 @@ def test_load_ecdlp_secp256k1_cain_2026_neutral_atom_qldpc() -> None:
 
     assert bundle.scenario.get("scenario") == "ecdlp_secp256k1_cain_2026_neutral_atom_qldpc"
     assert bundle.modality["document_id"] == "neutral_atom_cain_et_al_2026"
+    assert bundle.modality["coherence_time_t1_microseconds"]["unit"] == "microseconds"
     assert bundle.qec["document_id"] == "qldpc_cain_et_al_2026"
     assert bundle.qec["code_family"]["value"] == "quantum_ldpc"
     assert bundle.algorithm["document_id"] == "ecdlp_secp256k1_babbush_et_al_2026"

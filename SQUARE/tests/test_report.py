@@ -28,7 +28,12 @@ def test_build_report_rsa2048_parallel() -> None:
     bundle = load_scenario_bundle(scenario, root=root)
     report = build_scenario_report(bundle)
 
-    assert report["report_contract_version"] == 5
+    assert report["report_contract_version"] == 6
+    pl = report["physical_layer"]
+    assert pl["status"] == "passthrough_from_modality"
+    assert pl["document_id"] == "superconducting_gidney_ekera_2021"
+    assert len(pl["parameter_keys"]) == 8
+    assert pl["parameters"]["coherence_time_t1_microseconds"]["value"] == 80.0
     sm = report["system_metrics"]
     assert sm["schema"] == "system_metrics_v1"
     assert sm["status"] == "not_computed"
@@ -106,6 +111,8 @@ def test_build_report_rsa2048_parallel() -> None:
 
     json.dumps(report)
     md = report_to_markdown(report)
+    assert "Physical layer (OSRE snapshot)" in md
+    assert "passthrough_from_modality" in md
     assert "System metrics (OSRE)" in md
     assert "not_computed" in md
 
@@ -116,7 +123,9 @@ def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
     bundle = load_scenario_bundle(scenario, root=root)
     report = build_scenario_report(bundle)
 
-    assert report["report_contract_version"] == 5
+    assert report["report_contract_version"] == 6
+    assert report["physical_layer"]["status"] == "passthrough_from_modality"
+    assert report["physical_layer"]["document_id"] == "superconducting_babbush_et_al_2026"
     assert report["system_metrics"]["status"] == "not_computed"
     assert report["algorithm_metrics"]["n"] is None
     ecdlp = report["algorithm_metrics"]["ecdlp"]
@@ -147,6 +156,18 @@ def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
     assert timing["serial_time_days"] == pytest.approx(expected_days)
 
     json.dumps(report)
+
+
+def test_build_report_physical_layer_cain_neutral_atom() -> None:
+    root = find_square_root()
+    scenario = root / "Configs" / "ecdlp_secp256k1_cain_2026_neutral_atom_qldpc.yaml"
+    bundle = load_scenario_bundle(scenario, root=root)
+    report = build_scenario_report(bundle)
+    pl = report["physical_layer"]
+    assert report["report_contract_version"] == 6
+    assert pl["document_id"] == "neutral_atom_cain_et_al_2026"
+    assert pl["status"] == "passthrough_from_modality"
+    assert pl["parameters"]["coherence_time_t1_microseconds"]["value"] == 15000.0
 
 
 def test_build_report_surfaces_qcvv_qem_layers_when_loaded() -> None:

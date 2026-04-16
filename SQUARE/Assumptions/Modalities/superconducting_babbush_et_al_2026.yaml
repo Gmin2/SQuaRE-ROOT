@@ -60,3 +60,77 @@ platform_class:
   date: "2026-03-30"
   section: "Introduction"
   layer: physical
+
+# Extended native physical layer (OSRE memo); align with superconducting_gidney_ekera_2021 until Babbush body extracts pins.
+
+coherence_time_t1_microseconds:
+  value: 80.0
+  unit: "microseconds"
+  confidence: speculative
+  source: "Same order-of-magnitude as Gidney & Ekerå 2021 OSRE extension; refine from Babbush et al. main text"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+coherence_time_t2_microseconds:
+  value: 60.0
+  unit: "microseconds"
+  confidence: speculative
+  source: "Same order-of-magnitude as Gidney & Ekerå 2021 OSRE extension; refine from Babbush et al. main text"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+single_qubit_gate_error_rate:
+  value: 0.0006
+  unit: "error_probability_per_gate"
+  confidence: speculative
+  source: "Illustrative vs abstract 10^-3 headline two-qubit scale; refine from paper"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+two_qubit_gate_error_rate:
+  value: 0.001
+  unit: "error_probability_per_gate"
+  confidence: estimated
+  source: "Babbush et al. (2026), abstract (~10^-3 physical error headline)"
+  date: "2026-03-30"
+  section: "Abstract"
+  layer: physical
+
+measurement_error_rate:
+  value: 0.005
+  unit: "error_probability_per_shot"
+  confidence: speculative
+  source: "Order-of-magnitude readout proxy; refine from Babbush et al. main text"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+idle_error_rate_per_cycle:
+  value: 0.0001
+  unit: "error_probability_per_idle_slot_proxy"
+  confidence: speculative
+  source: "Idle proxy between gates; refine from paper"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+correlated_noise_parameter:
+  value: 1.0
+  unit: "dimensionless_multiplier"
+  confidence: speculative
+  source: "Baseline no explicit correlated-noise penalty in this headline profile"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+leakage_error_rate:
+  value: 0.00001
+  unit: "error_probability_per_gate_proxy"
+  confidence: speculative
+  source: "Small leakage proxy; refine from paper"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical

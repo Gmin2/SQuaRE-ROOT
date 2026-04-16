@@ -64,3 +64,78 @@ platform_class:
   date: "2026-03-30"
   section: "Abstract"
   layer: physical
+
+# Extended native physical layer (OSRE memo); long coherence typical of neutral atoms — speculative until Cain body pins.
+
+coherence_time_t1_microseconds:
+  value: 15000.0
+  unit: "microseconds"
+  confidence: speculative
+  source: "Order-of-magnitude neutral-atom storage; abstract cites highly coherent arrays — refine from paper"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+coherence_time_t2_microseconds:
+  value: 3000.0
+  unit: "microseconds"
+  confidence: speculative
+  source: "Order-of-magnitude T2 proxy; refine from Cain et al. device model"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+single_qubit_gate_error_rate:
+  value: 0.0002
+  unit: "error_probability_per_gate"
+  confidence: speculative
+  source: "Exploratory sub-threshold native gate proxy; abstract does not pin per-gate breakdown"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+two_qubit_gate_error_rate:
+  value: 0.0005
+  unit: "error_probability_per_gate"
+  confidence: estimated
+  source: "Cain et al. (2026), headline stack uses characteristic_physical_gate_error_rate scale; this row mirrors two-qubit native proxy"
+  date: "2026-03-30"
+  section: "SQuaRE alignment"
+  notes: Keep consistent with modality characteristic_physical_gate_error_rate when updating that entry.
+  layer: physical
+
+measurement_error_rate:
+  value: 0.003
+  unit: "error_probability_per_shot"
+  confidence: speculative
+  source: "Readout proxy for neutral-atom architectures; refine from paper"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+idle_error_rate_per_cycle:
+  value: 0.00005
+  unit: "error_probability_per_idle_slot_proxy"
+  confidence: speculative
+  source: "Idle / shuttling proxy; refine from reconfiguration model"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+correlated_noise_parameter:
+  value: 1.0
+  unit: "dimensionless_multiplier"
+  confidence: speculative
+  source: "Baseline multiplier; OSRE correlated scaling not yet modeled in this profile"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+leakage_error_rate:
+  value: 0.000005
+  unit: "error_probability_per_gate_proxy"
+  confidence: speculative
+  source: "Small leakage proxy for neutral-atom gates; refine from paper"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
