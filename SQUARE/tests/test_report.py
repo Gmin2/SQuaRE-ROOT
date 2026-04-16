@@ -28,7 +28,13 @@ def test_build_report_rsa2048_parallel() -> None:
     bundle = load_scenario_bundle(scenario, root=root)
     report = build_scenario_report(bundle)
 
-    assert report["report_contract_version"] == 4
+    assert report["report_contract_version"] == 5
+    sm = report["system_metrics"]
+    assert sm["schema"] == "system_metrics_v1"
+    assert sm["status"] == "not_computed"
+    assert sm["logical_qubit_capacity_lqc"] is None
+    assert sm["logical_operations_budget_lob"] is None
+    assert sm["quantum_operations_throughput_qot"] is None
     assert report["scenario"]["scenario"] == "rsa2048_gidney_ekera_2021_parallel"
     assert report["algorithm_metrics"]["n"] == 2048
 
@@ -99,6 +105,9 @@ def test_build_report_rsa2048_parallel() -> None:
     assert report["sources"]["qem"] is None
 
     json.dumps(report)
+    md = report_to_markdown(report)
+    assert "System metrics (OSRE)" in md
+    assert "not_computed" in md
 
 
 def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
@@ -107,7 +116,8 @@ def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
     bundle = load_scenario_bundle(scenario, root=root)
     report = build_scenario_report(bundle)
 
-    assert report["report_contract_version"] == 4
+    assert report["report_contract_version"] == 5
+    assert report["system_metrics"]["status"] == "not_computed"
     assert report["algorithm_metrics"]["n"] is None
     ecdlp = report["algorithm_metrics"]["ecdlp"]
     assert ecdlp["active"] is True

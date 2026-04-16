@@ -27,7 +27,30 @@ from square.schedule_heuristic import (
     infer_reaction_limited_from_scenario,
 )
 
-_REPORT_CONTRACT_VERSION = 4
+_REPORT_CONTRACT_VERSION = 5
+
+
+def _build_system_metrics_placeholder() -> dict[str, Any]:
+    """
+    OSRE-style system metrics (LQC, LOB, QOT, headroom, VER, mitigation ceiling).
+
+    Contract v5 reserves these keys; numeric composition is deferred to later phases.
+    See ``docs/output-contract.md`` § ``system_metrics``.
+    """
+    return {
+        "schema": "system_metrics_v1",
+        "status": "not_computed",
+        "notes": (
+            "Placeholder for OSRE Product Requirements Memorandum metrics. "
+            "Future releases will populate LQC/LOB/QOT from composed physical, QEC, magic, and algorithm layers."
+        ),
+        "logical_qubit_capacity_lqc": None,
+        "logical_operations_budget_lob": None,
+        "quantum_operations_throughput_qot": None,
+        "headroom_logical_depth": None,
+        "validated_error_rate_ver": None,
+        "mitigated_operations_ceiling": None,
+    }
 
 _HEADER_KEYS = frozenset(
     {
@@ -1048,6 +1071,7 @@ def build_scenario_report(
             }
         },
         "physical_rollup": physical_rollup,
+        "system_metrics": _build_system_metrics_placeholder(),
         "qec_distance_resolution": qec_distance_resolution,
         "layout_estimate": layout_estimate,
         "layout_optimization": layout_optimization,
@@ -1152,6 +1176,13 @@ def report_to_markdown(report: Mapping[str, Any]) -> str:
         f"- **Table2 / schedule_model_v1 ratio:** {dash.get('schedule_calibration_ratio_table2_over_model_v1')}\n"
     )
     lines.append(f"- **T-factory fallback flagged:** {dash.get('t_factory_fallback_recommended')}\n")
+
+    sm = report.get("system_metrics") or {}
+    lines.append("\n## System metrics (OSRE)\n")
+    lines.append(
+        f"- **Status:** `{sm.get('status')}` — LQC/LOB/QOT/headroom/VER reserved for future computation "
+        f"(contract v{report.get('report_contract_version')}).\n"
+    )
 
     warns = report.get("warnings") or []
     if warns:

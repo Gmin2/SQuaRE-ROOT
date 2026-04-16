@@ -15,7 +15,7 @@ Every report is a JSON-serializable object with at least:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `report_contract_version` | `number` | Contract version (currently `4`). |
+| `report_contract_version` | `number` | Contract version (currently `5`). |
 | `engine` | `object` | `{ "name": "square", "version": "<package version>" }`. |
 | `generated_at` | `string` | ISO-8601 UTC timestamp when the report was built. |
 | `warnings` | `array` | Human-readable strings for caveats (missing distance `d`, symbolic formulas, branch flags). |
@@ -28,6 +28,7 @@ Every report is a JSON-serializable object with at least:
 | `dashboard` | `object` | Cross-layer headline numbers for quick comparison (may include `null` where data is missing). |
 | `qec_overhead` | `object` | Slots for code-distance-dependent overhead (e.g. patch qubit formula + `d`); see below. |
 | `physical_rollup` | `object` | End-to-end **data-plane** physical qubit roll-up when both `n` and `d` are available; see below. |
+| `system_metrics` | `object` | OSRE-style **LQC / LOB / QOT** (and related) slots; see § `system_metrics`. As of v5, numeric values are **`null`** placeholders until composed from layers. |
 | `timing` | `object` | Table 2 pins, naive depth×cycle, optional schedule heuristic + calibration; see below. |
 | `qec_distance_resolution` | `object` | How `d` was chosen (`cli_override`, `explicit_scenario`, `heuristic_union_bound`, etc.). |
 | `layout_estimate` | `object` | Data-plane proxy, pinned end-to-end qubits, derived non-data overhead, optional YAML factory footprint; see below. |
@@ -173,6 +174,24 @@ Present when patch formula, logical qubits, measurement depth, and physical gate
 | `approximate_data_plane_physical_qubits` | Product when both factors exist; mirrors `dashboard.approximate_data_plane_physical_qubits`. |
 | `patch_formula_status` | Same string as `qec_overhead...status`. |
 
+## `system_metrics` (OSRE-aligned)
+
+Reserved for **system-level** quantities described in the OSRE Product Requirements Memorandum (LQC, LOB, QOT, headroom, VER, mitigated ceiling). **Contract v5** introduces the object shape; engines **do not** compute these numbers yet unless `status` is updated by a future release.
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `schema` | `string` | Sub-schema tag for this block (currently `system_metrics_v1`). |
+| `status` | `string` | `not_computed` until implementation fills metrics. |
+| `notes` | `string` | Human-readable scope / deferral message. |
+| `logical_qubit_capacity_lqc` | `number \| null` | Usable logical width after factories, routing, margin (**LQC**). |
+| `logical_operations_budget_lob` | `number \| null` | Logical depth budget before failure probability exceeds target (**LOB**). |
+| `quantum_operations_throughput_qot` | `number \| null` | Logical operations per unit time given cycle time and parallelism (**QOT**). |
+| `headroom_logical_depth` | `number \| null` | Margin between LOB and algorithm-required logical depth. |
+| `validated_error_rate_ver` | `number \| null` | QCVV-adjusted physical error proxy (**VER**). |
+| `mitigated_operations_ceiling` | `number \| null` | LOB expansion from QEM (sampling tradeoff), when modeled. |
+
+**Consumers:** Treat all nullable metrics as **absent** when `null`. Use `dashboard`, `physical_rollup`, `algorithm_metrics`, and `timing` for current headline numbers until `status` changes.
+
 ## Provenance
 
 Per-parameter `source`, `date`, `doi`, `section`, and `confidence` are **passed through** from YAML; the report does not invent citations. Values computed only for display (e.g. formula evaluation) appear under `algorithm_metrics.evaluated` with `provenance: "computed_from_yaml_formula"` in the implementation’s internal structure where applicable.
@@ -202,3 +221,4 @@ Evaluable formula strings follow **Python** syntax for powers (`**`, not `^`).
 | `2` | Adds `qec_distance_resolution`, `layout_estimate`, extended `timing`, and heuristic distance policy. |
 | `3` | Consolidated magic Table 2 (`paper_table2_rsa2048_reference_rows`) and algorithm Table 1 pins (`paper_table1_pins_by_modulus_bit_length`); dashboard adds `table2_pinned_source_parameter` / `table2_pinned_row_layout_descriptor`; `ccz_factory_parameter_key` is now the row’s `layout_descriptor`. |
 | `4` | Optional scenario `paths.qcvv` / `paths.qem`; `sources` and `layers` include `qcvv` and `qem` (or `null`) as separate stacks from `qcvv_qem`. |
+| `5` | Adds top-level `system_metrics` (OSRE LQC/LOB/QOT slots); all metric fields **`null`** and `status: not_computed` until composed roll-ups land. |
