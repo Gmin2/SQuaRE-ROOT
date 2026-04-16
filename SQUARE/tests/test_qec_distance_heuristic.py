@@ -5,7 +5,6 @@ from __future__ import annotations
 import math
 
 import pytest
-
 from square.qec_distance_heuristic import (
     min_odd_distance_discrete_scan,
     suggest_surface_code_distance_union_bound,

@@ -7,6 +7,14 @@ cd SQUARE
 python -m pip install -e ".[dev]"
 ```
 
+## Lint and types
+
+```bash
+cd SQUARE
+python -m ruff check square tests
+python -m mypy square
+```
+
 ## Tests
 
 Run the full suite before opening a PR:
@@ -16,7 +24,7 @@ cd SQUARE
 python -m pytest
 ```
 
-CI runs the same command and a short `square-mc` smoke test.
+CI runs **ruff**, **mypy**, **pytest**, and a short `square-mc` smoke test (outputs under the runner temp directory).
 
 ## Layout
 

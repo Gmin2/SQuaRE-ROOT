@@ -7,14 +7,25 @@ Output shape is documented in ``docs/output-contract.md`` (``report_contract_ver
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from datetime import datetime, timezone
-from typing import Any, Mapping
+from typing import Any
 
-from square.formula_eval import FormulaEvalError, eval_numeric_formula, eval_numeric_formula_with_bindings
+from square.formula_eval import (
+    FormulaEvalError,
+    eval_numeric_formula,
+    eval_numeric_formula_with_bindings,
+)
+from square.layout_optimization import (
+    build_layout_distance_candidates,
+    summarize_layout_optimization,
+)
 from square.loader import ScenarioBundle
-from square.layout_optimization import build_layout_distance_candidates, summarize_layout_optimization
 from square.qec_distance_heuristic import suggest_surface_code_distance_union_bound
-from square.schedule_heuristic import build_parallel_depth_schedule_v1, infer_reaction_limited_from_scenario
+from square.schedule_heuristic import (
+    build_parallel_depth_schedule_v1,
+    infer_reaction_limited_from_scenario,
+)
 
 _REPORT_CONTRACT_VERSION = 4
 
@@ -117,7 +128,7 @@ def _table2_rsa2048_row_for_ccz(magic: Mapping[str, Any], ccz: int) -> dict[str,
             continue
         raw = row.get("ccz_factories")
         try:
-            if int(raw) == target:
+            if raw is not None and int(raw) == target:
                 return row
         except (TypeError, ValueError):
             continue
@@ -182,7 +193,8 @@ def _engine_version() -> str:
 
 def _resolve_ecdlp_variant(scenario: Mapping[str, Any], warnings: list[str]) -> str:
     """Return scenario ``ecdlp_variant`` (default: low_toffoli_variant)."""
-    tgt = scenario.get("target") if isinstance(scenario.get("target"), dict) else {}
+    _raw_target = scenario.get("target")
+    tgt: dict[str, Any] = _raw_target if isinstance(_raw_target, dict) else {}
     raw = tgt.get("ecdlp_variant")
     if raw is None:
         raw = scenario.get("ecdlp_variant")
@@ -409,7 +421,8 @@ def _resolve_code_distance_full(
         meta.update({"mode": "explicit_scenario", "distance_d": d_explicit, "explicit_in_scenario": True})
         return d_explicit, meta
 
-    qec_block = scenario.get("qec") if isinstance(scenario.get("qec"), dict) else {}
+    _raw_qec = scenario.get("qec")
+    qec_block: dict[str, Any] = _raw_qec if isinstance(_raw_qec, dict) else {}
     policy_raw = qec_block.get("distance_policy") or qec_block.get("distance_mode")
     policy = str(policy_raw).strip().lower() if policy_raw is not None else ""
     heuristic_aliases = frozenset({"heuristic_union_bound", "optimize_heuristic", "heuristic"})
@@ -512,7 +525,8 @@ def _build_layout_optimization_block(
     """
     Per-distance layout proxy: union-bound mass + patch formula → data-plane qubits (+ optional fit to reported total).
     """
-    qec_block = scenario.get("qec") if isinstance(scenario.get("qec"), dict) else {}
+    _raw_qec = scenario.get("qec")
+    qec_block: dict[str, Any] = _raw_qec if isinstance(_raw_qec, dict) else {}
     if qec_block.get("emit_layout_optimization") is False:
         return None
 
@@ -593,7 +607,8 @@ def build_scenario_report(
     """
     warnings: list[str] = []
     scenario = bundle.scenario
-    target = scenario.get("target") if isinstance(scenario.get("target"), dict) else {}
+    _raw_target = scenario.get("target")
+    target: dict[str, Any] = _raw_target if isinstance(_raw_target, dict) else {}
     algo = bundle.algorithm
 
     ecdlp_ctx = _build_ecdlp_report_context(algo, scenario, warnings)

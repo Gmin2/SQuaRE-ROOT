@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from square.loader import ScenarioBundle
 from square.mc.overrides import apply_numeric_overrides

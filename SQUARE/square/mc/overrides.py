@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import copy
+from collections.abc import Mapping
 from dataclasses import replace
-from typing import Any, Mapping
+from typing import Any
 
 from square.loader import ScenarioBundle
 
@@ -43,7 +44,8 @@ def apply_numeric_overrides(
         entry = target.get(key)
         if not _is_parameter_entry(entry):
             raise TypeError(f"Cannot override {key!r}: expected a parameter_entry with value/unit.")
-        new_entry = copy.deepcopy(entry)
+        assert isinstance(entry, dict)
+        new_entry: dict[str, Any] = copy.deepcopy(entry)
         new_entry["value"] = float(val)
         target[key] = new_entry
 

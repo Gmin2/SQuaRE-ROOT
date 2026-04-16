@@ -7,9 +7,9 @@ import random
 from pathlib import Path
 
 import pytest
-
 from square.loader import find_square_root, load_scenario_bundle
 from square.mc import (
+    MC_SUMMARY_CONTRACT_VERSION,
     PARAMETER_LAYERS,
     evaluate_forward_model,
     load_monte_carlo_study_spec,
@@ -82,6 +82,7 @@ def test_run_monte_carlo_study_small() -> None:
     assert "moments" in result.summary
     assert "mean" in result.summary["moments"]["naive_serial_time_days"]
     assert "correlations" in result.summary
+    assert result.summary["mc_summary_contract_version"] == MC_SUMMARY_CONTRACT_VERSION
 
 
 def test_latin_hypercube_requires_all_uniform() -> None:
@@ -166,3 +167,4 @@ def test_cli_mc_main_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     data = json.loads((tmp_path / "out.json").read_text(encoding="utf-8"))
     assert data["n_samples"] == 4
     assert "quantiles" in data
+    assert data["mc_summary_contract_version"] == MC_SUMMARY_CONTRACT_VERSION

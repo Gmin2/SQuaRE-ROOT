@@ -5,7 +5,7 @@
 - **Forward model:** `evaluate_forward_model` = patch numeric modality/QEC parameters → `build_scenario_report`.
 - **Study YAML:** `load_monte_carlo_study_spec` — priors (`uniform`, `log_uniform`, `fixed`) and optional `sampling.strategy` (`independent` | `latin_hypercube`).
 - **Sampling:** `run_monte_carlo_study` — draws θ, evaluates `f(θ)` (sequential or threaded `--jobs`).
-- **Outputs:** CSV rows + JSON summary (`quantiles`, `moments`, pairwise `correlations` on metrics).
+- **Outputs:** CSV rows + JSON summary (`mc_summary_contract_version`, `quantiles`, `moments`, pairwise `correlations` on metrics). Bump `MC_SUMMARY_CONTRACT_VERSION` in `run_sampling.py` when the summary shape changes.
 
 ## Variance reduction
 

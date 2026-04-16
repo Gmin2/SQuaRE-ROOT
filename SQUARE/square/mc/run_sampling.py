@@ -10,16 +10,20 @@ from __future__ import annotations
 import csv
 import json
 import random
+from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from square.loader import ScenarioBundle
 from square.mc.forward_model import evaluate_forward_model
 from square.mc.lhs import all_blocks_uniform_for_lhs, generate_lhs_uniform_thetas
 from square.mc.parameters import sample_parameter_value
 from square.mc.study_spec import MonteCarloStudySpec
+
+# Bump when summary JSON shape or semantics change (quantiles/moments/correlations blocks).
+MC_SUMMARY_CONTRACT_VERSION = 1
 
 
 @dataclass(frozen=True)
@@ -47,7 +51,7 @@ def _linear_quantile(sorted_vals: list[float], q: float) -> float:
 
 
 def _quantile_summary_for_columns(
-    rows: list[Mapping[str, Any]],
+    rows: Sequence[Mapping[str, Any]],
     columns: list[str],
 ) -> dict[str, dict[str, float]]:
     out: dict[str, dict[str, float]] = {}
@@ -74,7 +78,7 @@ def _quantile_summary_for_columns(
 
 
 def _moment_summary_for_columns(
-    rows: list[Mapping[str, Any]],
+    rows: Sequence[Mapping[str, Any]],
     columns: list[str],
 ) -> dict[str, dict[str, float]]:
     out: dict[str, dict[str, float]] = {}
@@ -123,7 +127,7 @@ def _pearson(xs: list[float], ys: list[float]) -> float | None:
 
 
 def _pairwise_correlations(
-    rows: list[Mapping[str, Any]],
+    rows: Sequence[Mapping[str, Any]],
     columns: list[str],
 ) -> dict[str, dict[str, float | None]]:
     """Pearson correlation for columns that have numeric values on every row."""
@@ -228,13 +232,18 @@ def run_monte_carlo_study(
     for i, (theta, metrics) in enumerate(zip(theta_list, metrics_list, strict=True)):
         rows.append({"sample_index": i, **theta, **metrics})
 
-    metric_keys = [k for k in rows[0] if k not in ("sample_index",) and k not in param_keys]
-    summary_columns = param_keys + metric_keys
+    if not rows:
+        metric_keys: list[str] = []
+        summary_columns = list(param_keys)
+    else:
+        metric_keys = [k for k in rows[0] if k not in ("sample_index",) and k not in param_keys]
+        summary_columns = param_keys + metric_keys
     quantiles = _quantile_summary_for_columns(rows, summary_columns)
     moments = _moment_summary_for_columns(rows, summary_columns)
     correlations = _pairwise_correlations(rows, metric_keys)
 
     summary: dict[str, Any] = {
+        "mc_summary_contract_version": MC_SUMMARY_CONTRACT_VERSION,
         "study_id": spec.study_id,
         "schema_version": spec.schema_version,
         "scope": spec.scope,

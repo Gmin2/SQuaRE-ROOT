@@ -7,9 +7,8 @@ import math
 from pathlib import Path
 
 import pytest
-
-from square.loader import find_square_root, load_scenario_bundle
 from square.formula_eval import eval_numeric_formula, eval_numeric_formula_with_bindings
+from square.loader import find_square_root, load_scenario_bundle
 from square.report import build_scenario_report, report_to_markdown
 
 
@@ -235,10 +234,10 @@ def test_load_scenario_rejects_path_outside_root(tmp_path: Path) -> None:
     scenario = root / "Configs" / "bad.yaml"
     scenario.write_text(
         "schema_version: 1\nscenario: bad\npaths:\n"
-        f"  modality: ../outside.yaml\n"
-        f"  qec_code: ../outside.yaml\n"
-        f"  magic: ../outside.yaml\n"
-        f"  algorithm: ../outside.yaml\n",
+        "  modality: ../outside.yaml\n"
+        "  qec_code: ../outside.yaml\n"
+        "  magic: ../outside.yaml\n"
+        "  algorithm: ../outside.yaml\n",
         encoding="utf-8",
     )
     with pytest.raises(ValueError, match="escapes"):

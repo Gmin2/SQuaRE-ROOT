@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from square.loader import find_square_root, load_scenario_bundle
 
 

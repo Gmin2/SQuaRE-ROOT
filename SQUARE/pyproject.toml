@@ -15,11 +15,31 @@ square-report = "square.cli:main"
 square-mc = "square.cli_mc:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=7"]
+dev = [
+  "pytest>=7",
+  "ruff~=0.9",
+  "mypy~=1.14",
+  "types-PyYAML",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["square*"]
+
+[tool.ruff]
+target-version = "py310"
+src = ["square", "tests"]
+
+[tool.ruff.lint]
+# Pyflakes, isort, pyupgrade, whitespace; omit pycodestyle "E" to avoid mass E501 line-length churn.
+select = ["F", "I", "UP", "W"]
+
+[tool.mypy]
+python_version = "3.10"
+packages = ["square"]
+warn_unused_ignores = true
+show_error_codes = true
+strict_optional = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

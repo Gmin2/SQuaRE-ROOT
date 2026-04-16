@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 
 def sample_parameter_value(spec: Mapping[str, Any], rng: random.Random) -> float:

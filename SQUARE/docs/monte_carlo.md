@@ -5,7 +5,7 @@
 Sample uncertain parameters **θ** from priors in a study YAML, evaluate the deterministic forward model **f(θ, scenario)** once per draw, and aggregate:
 
 - Per-sample **CSV**
-- JSON **summary**: **quantiles** (p05 / p50 / p95), **moments** (mean, std, min, max), pairwise **Pearson correlations** among metric columns (complete rows only)
+- JSON **summary**: **`mc_summary_contract_version`** (bump when summary shape changes), **quantiles** (p05 / p50 / p95), **moments** (mean, std, min, max), pairwise **Pearson correlations** among metric columns (complete rows only)
 
 **Scope:** prior predictive only (no experimental likelihood / posterior here).
 
