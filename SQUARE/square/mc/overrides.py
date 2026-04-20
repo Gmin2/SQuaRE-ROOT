@@ -8,6 +8,7 @@ from dataclasses import replace
 from typing import Any
 
 from square.loader import ScenarioBundle
+from square.yaml_assumption import is_parameter_entry
 
 PARAMETER_LAYERS: dict[str, str] = {
     "characteristic_physical_gate_error_rate": "modality",
@@ -18,10 +19,6 @@ PARAMETER_LAYERS: dict[str, str] = {
     "heuristic_distance_min_d": "qec",
     "heuristic_distance_max_d": "qec",
 }
-
-
-def _is_parameter_entry(obj: Any) -> bool:
-    return isinstance(obj, dict) and "value" in obj and "unit" in obj
 
 
 def apply_numeric_overrides(
@@ -42,7 +39,7 @@ def apply_numeric_overrides(
             )
         target = modality if layer == "modality" else qec
         entry = target.get(key)
-        if not _is_parameter_entry(entry):
+        if not is_parameter_entry(entry):
             raise TypeError(f"Cannot override {key!r}: expected a parameter_entry with value/unit.")
         assert isinstance(entry, dict)
         new_entry: dict[str, Any] = copy.deepcopy(entry)

@@ -100,8 +100,12 @@ def main(argv: list[str] | None = None) -> int:
     if out_json is None:
         out_json = Path(f"mc_summary_{spec.study_id}.json")
 
-    write_mc_samples_csv(out_csv, result.rows)
-    write_mc_summary_json(out_json, result.summary)
+    try:
+        write_mc_samples_csv(out_csv, result.rows)
+        write_mc_summary_json(out_json, result.summary)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
 
     print(f"Wrote {len(result.rows)} rows -> {out_csv.resolve()}")
     print(f"Wrote summary (quantiles, moments, correlations) -> {out_json.resolve()}")

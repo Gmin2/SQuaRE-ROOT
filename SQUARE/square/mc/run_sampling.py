@@ -296,8 +296,15 @@ def _csv_cell(v: Any) -> str:
 
 
 def write_mc_summary_json(path: str | Path, summary: Mapping[str, Any]) -> None:
+    """
+    Write Monte Carlo summary JSON with strict floats (no ``NaN`` / ``Infinity``).
+
+    :raises ValueError: if the summary is not JSON-serializable under ``allow_nan=False``.
+    """
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    with p.open("w", encoding="utf-8") as fh:
-        json.dump(dict(summary), fh, indent=2)
-        fh.write("\n")
+    try:
+        text = json.dumps(dict(summary), indent=2, allow_nan=False)
+    except ValueError as exc:
+        raise ValueError(f"cannot serialize MC summary to JSON: {exc}") from exc
+    p.write_text(text + "\n", encoding="utf-8")

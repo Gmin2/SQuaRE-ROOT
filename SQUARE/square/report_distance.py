@@ -7,11 +7,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from square.heuristic_union_inputs import read_heuristic_union_bound_inputs
 from square.qec_distance_heuristic import suggest_union_bound_code_distance
 from square.yaml_numeric import (
     read_evaluated_metric_float,
     read_modality_characteristic_gate_error,
-    read_parameter_entry_float_default,
 )
 
 
@@ -122,60 +122,18 @@ def resolve_code_distance_full(
         meta.update({"mode": "heuristic_failed_missing_formulas", "distance_d": None})
         return None, meta
 
-    budget_raw = qec_block.get("logical_error_budget", 0.1)
-    try:
-        budget_f = float(budget_raw)
-    except (TypeError, ValueError):
-        budget_f = 0.1
-        warnings.append("qec.logical_error_budget invalid; using 0.1.")
-
-    p_th = read_parameter_entry_float_default(
-        qec.get("heuristic_surface_code_physical_threshold_order_of_magnitude"),
-        0.01,
-        warnings,
-        context="paths.qec",
-        param_name="heuristic_surface_code_physical_threshold_order_of_magnitude",
-    )
-    pref = read_parameter_entry_float_default(
-        qec.get("heuristic_logical_error_prefactor"),
-        0.05,
-        warnings,
-        context="paths.qec",
-        param_name="heuristic_logical_error_prefactor",
-    )
-    min_d = int(
-        read_parameter_entry_float_default(
-            qec.get("heuristic_distance_min_d"),
-            5.0,
-            warnings,
-            context="paths.qec",
-            param_name="heuristic_distance_min_d",
-        )
-    )
-    max_d = int(
-        read_parameter_entry_float_default(
-            qec.get("heuristic_distance_max_d"),
-            55.0,
-            warnings,
-            context="paths.qec",
-            param_name="heuristic_distance_max_d",
-        )
-    )
-
-    dist_opt_raw = qec_block.get("distance_optimizer", "discrete_scan")
-    dist_opt = str(dist_opt_raw).strip().lower() if dist_opt_raw is not None else "discrete_scan"
-    use_discrete_scan = dist_opt != "closed_form"
+    hu = read_heuristic_union_bound_inputs(qec, qec_block, warnings, budget_warning_context=None)
 
     d, hmeta = suggest_union_bound_code_distance(
         physical_gate_error_rate=p,
         logical_qubit_count=lq_val,
         qec_cycle_count_proxy=dp_val,
-        logical_error_budget=budget_f,
-        phenomenological_p_th=p_th,
-        phenomenological_prefactor=pref,
-        min_d=min_d,
-        max_d=max_d,
-        use_discrete_scan=use_discrete_scan,
+        logical_error_budget=hu.logical_error_budget,
+        phenomenological_p_th=hu.phenomenological_p_th,
+        phenomenological_prefactor=hu.phenomenological_prefactor,
+        min_d=hu.min_d,
+        max_d=hu.max_d,
+        use_discrete_scan=hu.use_discrete_scan,
     )
     warnings.append(
         "code distance d from heuristic_union_bound (phenomenological model), "
@@ -186,8 +144,8 @@ def resolve_code_distance_full(
             "mode": "heuristic_union_bound",
             "distance_d": d,
             "heuristic": hmeta,
-            "logical_error_budget": budget_f,
-            "distance_optimizer": "discrete_scan" if use_discrete_scan else "closed_form",
+            "logical_error_budget": hu.logical_error_budget,
+            "distance_optimizer": "discrete_scan" if hu.use_discrete_scan else "closed_form",
             "physical_gate_error_rate_effective": p,
         }
     )

@@ -127,6 +127,14 @@ def test_monte_carlo_parallel_threads() -> None:
     assert result.summary["n_jobs"] == 2
 
 
+def test_write_mc_summary_json_rejects_non_finite_floats(tmp_path: Path) -> None:
+    from square.mc.run_sampling import write_mc_summary_json
+
+    bad = {"x": float("nan")}
+    with pytest.raises(ValueError, match="cannot serialize MC summary"):
+        write_mc_summary_json(tmp_path / "bad.json", bad)
+
+
 def test_write_csv_and_summary_roundtrip(tmp_path: Path) -> None:
     rows = [
         {"sample_index": 0, "x": 1.0, "m": 2.0},

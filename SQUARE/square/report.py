@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from square.formula_eval import FormulaEvalError, eval_numeric_formula_with_bindings
+from square.heuristic_union_inputs import read_heuristic_union_bound_inputs
 from square.layout_optimization import (
     build_layout_distance_candidates,
     summarize_layout_optimization,
@@ -570,44 +571,8 @@ def _build_layout_optimization_block(
     if p is None or dp_val is None:
         return None
 
-    budget_raw = qec_block.get("logical_error_budget", 0.1)
-    try:
-        budget_f = float(budget_raw)
-    except (TypeError, ValueError):
-        budget_f = 0.1
-        warnings.append("layout_optimization: qec.logical_error_budget invalid; using 0.1.")
-
-    p_th = read_parameter_entry_float_default(
-        qec.get("heuristic_surface_code_physical_threshold_order_of_magnitude"),
-        0.01,
-        warnings,
-        context="paths.qec",
-        param_name="heuristic_surface_code_physical_threshold_order_of_magnitude",
-    )
-    pref = read_parameter_entry_float_default(
-        qec.get("heuristic_logical_error_prefactor"),
-        0.05,
-        warnings,
-        context="paths.qec",
-        param_name="heuristic_logical_error_prefactor",
-    )
-    min_d = int(
-        read_parameter_entry_float_default(
-            qec.get("heuristic_distance_min_d"),
-            5.0,
-            warnings,
-            context="paths.qec",
-            param_name="heuristic_distance_min_d",
-        )
-    )
-    max_d = int(
-        read_parameter_entry_float_default(
-            qec.get("heuristic_distance_max_d"),
-            55.0,
-            warnings,
-            context="paths.qec",
-            param_name="heuristic_distance_max_d",
-        )
+    hu = read_heuristic_union_bound_inputs(
+        qec, qec_block, warnings, budget_warning_context="layout_optimization"
     )
 
     candidates = build_layout_distance_candidates(
@@ -615,18 +580,18 @@ def _build_layout_optimization_block(
         logical_qubits=float(logical_qubits),
         physical_gate_error_rate=p,
         qec_cycle_count_proxy=dp_val,
-        logical_error_budget=budget_f,
-        phenomenological_p_th=p_th,
-        phenomenological_prefactor=pref,
-        min_d=min_d,
-        max_d=max_d,
+        logical_error_budget=hu.logical_error_budget,
+        phenomenological_p_th=hu.phenomenological_p_th,
+        phenomenological_prefactor=hu.phenomenological_prefactor,
+        min_d=hu.min_d,
+        max_d=hu.max_d,
         reported_total_physical_qubits=reported_total_physical_qubits,
         factory_footprint_physical_qubits=factory_footprint_physical_qubits,
     )
     summary = summarize_layout_optimization(
         selected_d=int(selected_d),
         candidates=candidates,
-        logical_error_budget=budget_f,
+        logical_error_budget=hu.logical_error_budget,
         patch_formula=patch_formula,
     )
     emit_trace = bool(qec_block.get("emit_optimization_trace", False))
@@ -854,70 +819,33 @@ def _build_parameter_sensitivity_block(
             "notes": ["Local sensitivity needs evaluated abstract_logical_qubits and abstract_measurement_depth_layers."],
         }
 
-    try:
-        budget_f = float(qec_block.get("logical_error_budget", 0.1))
-    except (TypeError, ValueError):
-        budget_f = 0.1
-        warnings.append("parameter_sensitivity: qec.logical_error_budget invalid; using 0.1.")
-    p_th = read_parameter_entry_float_default(
-        qec.get("heuristic_surface_code_physical_threshold_order_of_magnitude"),
-        0.01,
-        warnings,
-        context="paths.qec",
-        param_name="heuristic_surface_code_physical_threshold_order_of_magnitude",
+    hu = read_heuristic_union_bound_inputs(
+        qec, qec_block, warnings, budget_warning_context="parameter_sensitivity"
     )
-    pref = read_parameter_entry_float_default(
-        qec.get("heuristic_logical_error_prefactor"),
-        0.05,
-        warnings,
-        context="paths.qec",
-        param_name="heuristic_logical_error_prefactor",
-    )
-    min_d = int(
-        read_parameter_entry_float_default(
-            qec.get("heuristic_distance_min_d"),
-            5.0,
-            warnings,
-            context="paths.qec",
-            param_name="heuristic_distance_min_d",
-        )
-    )
-    max_d = int(
-        read_parameter_entry_float_default(
-            qec.get("heuristic_distance_max_d"),
-            55.0,
-            warnings,
-            context="paths.qec",
-            param_name="heuristic_distance_max_d",
-        )
-    )
-    dist_opt_raw = qec_block.get("distance_optimizer", "discrete_scan")
-    dist_opt = str(dist_opt_raw).strip().lower() if dist_opt_raw is not None else "discrete_scan"
-    use_discrete_scan = dist_opt != "closed_form"
 
     def _d_at(*, p_eff: float, p_th_use: float) -> int:
         d_out, _ = suggest_union_bound_code_distance(
             physical_gate_error_rate=p_eff,
             logical_qubit_count=lq_val,
             qec_cycle_count_proxy=dp_val,
-            logical_error_budget=budget_f,
+            logical_error_budget=hu.logical_error_budget,
             phenomenological_p_th=p_th_use,
-            phenomenological_prefactor=pref,
-            min_d=min_d,
-            max_d=max_d,
-            use_discrete_scan=use_discrete_scan,
+            phenomenological_prefactor=hu.phenomenological_prefactor,
+            min_d=hu.min_d,
+            max_d=hu.max_d,
+            use_discrete_scan=hu.use_discrete_scan,
         )
         return int(d_out)
 
     eps = _SENSITIVITY_REL_EPS
-    d_p_up = _d_at(p_eff=p0 * (1.0 + eps), p_th_use=p_th)
-    d_p_down = _d_at(p_eff=p0 / (1.0 + eps), p_th_use=p_th)
+    d_p_up = _d_at(p_eff=p0 * (1.0 + eps), p_th_use=hu.phenomenological_p_th)
+    d_p_down = _d_at(p_eff=p0 / (1.0 + eps), p_th_use=hu.phenomenological_p_th)
     denom_p = 2.0 * p0 * eps
     d_distance_d_dphys = (float(d_p_up) - float(d_p_down)) / denom_p if denom_p > 0 else None
 
-    d_th_up = _d_at(p_eff=p0, p_th_use=p_th * (1.0 + eps))
-    d_th_down = _d_at(p_eff=p0, p_th_use=p_th / (1.0 + eps))
-    denom_th = 2.0 * p_th * eps
+    d_th_up = _d_at(p_eff=p0, p_th_use=hu.phenomenological_p_th * (1.0 + eps))
+    d_th_down = _d_at(p_eff=p0, p_th_use=hu.phenomenological_p_th / (1.0 + eps))
+    denom_th = 2.0 * hu.phenomenological_p_th * eps
     d_distance_d_dpth = (float(d_th_up) - float(d_th_down)) / denom_th if denom_th > 0 else None
 
     rows: list[dict[str, Any]] = [
@@ -936,10 +864,10 @@ def _build_parameter_sensitivity_block(
             "parameter": "heuristic_surface_code_physical_threshold_order_of_magnitude",
             "layer": "qec",
             "metric": "code_distance_d",
-            "baseline_parameter_value": p_th,
+            "baseline_parameter_value": hu.phenomenological_p_th,
             "baseline_metric_value": float(d0),
             "derivative_metric_per_parameter": d_distance_d_dpth,
-            "elasticity_metric_times_parameter_over_value": (d_distance_d_dpth * p_th / float(d0))
+            "elasticity_metric_times_parameter_over_value": (d_distance_d_dpth * hu.phenomenological_p_th / float(d0))
             if (d_distance_d_dpth is not None and d0 != 0)
             else None,
         },

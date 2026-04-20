@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from square.loader import ScenarioBundle
+from square.yaml_assumption import is_parameter_entry
 
 DOCUMENT_HEADER_KEYS: frozenset[str] = frozenset(
     {
@@ -19,10 +20,6 @@ DOCUMENT_HEADER_KEYS: frozenset[str] = frozenset(
         "notes",
     }
 )
-
-
-def is_parameter_entry(obj: Any) -> bool:
-    return isinstance(obj, dict) and "value" in obj and "unit" in obj
 
 
 def split_document(doc: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
