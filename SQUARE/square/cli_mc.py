@@ -6,7 +6,11 @@ import argparse
 import sys
 from pathlib import Path
 
-from square.loader import find_square_root, load_scenario_bundle
+from square.loader import (
+    find_square_root,
+    load_scenario_bundle,
+    resolve_path_under_square_root,
+)
 from square.mc import (
     load_monte_carlo_study_spec,
     run_monte_carlo_study,
@@ -74,11 +78,16 @@ def main(argv: list[str] | None = None) -> int:
     root = args.root.resolve() if args.root is not None else find_square_root(Path(__file__))
 
     spec = load_monte_carlo_study_spec(args.study, root=root)
-    scenario_path = root / spec.base_scenario
+    try:
+        scenario_path = resolve_path_under_square_root(root, spec.base_scenario)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
     if not scenario_path.is_file():
-        scenario_path = Path(spec.base_scenario).resolve()
-    if not scenario_path.is_file():
-        print(f"error: base scenario not found: {spec.base_scenario}", file=sys.stderr)
+        print(
+            f"error: base scenario not found under project root: {spec.base_scenario} -> {scenario_path}",
+            file=sys.stderr,
+        )
         return 1
 
     bundle = load_scenario_bundle(scenario_path, root=root)

@@ -7,12 +7,9 @@ Output shape is documented in ``docs/output-contract.md`` (``report_contract_ver
 from __future__ import annotations
 
 import math
-import re
 from collections.abc import Mapping
-from datetime import datetime, timezone
 from typing import Any
 
-from square.formula_eval import FormulaEvalError, eval_numeric_formula_with_bindings
 from square.heuristic_union_inputs import read_heuristic_union_bound_inputs
 from square.layout_optimization import (
     build_layout_distance_candidates,
@@ -23,17 +20,21 @@ from square.qec_distance_heuristic import (
     phenomenological_logical_error_per_cycle,
     suggest_union_bound_code_distance,
 )
+from square.report_assembly import assemble_report_shell
 from square.report_dashboard import build_dashboard_fields
 from square.report_distance import resolve_code_distance_full
-from square.report_formula_metrics import (
-    FORMULA_METRICS,
-    evaluate_non_ecdlp_formula_metrics,
+from square.report_formula_pins import (
+    TABLE2_RSA2048_ROWS_KEY,
+    build_formula_evaluation_and_pins,
+    parse_table2_pins_early,
+    table1_pin_row,
 )
-from square.report_layers import DOCUMENT_HEADER_KEYS, build_report_sources_and_layers
+from square.report_layers import build_report_sources_and_layers
 from square.report_markdown import (
     report_to_markdown,  # noqa: F401 — re-exported for square.report API
 )
 from square.report_physical_layout import build_physical_rollup_and_layout_estimate
+from square.report_qec_patch import evaluate_patch_physical_per_logical
 from square.report_system_metrics import build_system_metrics_block
 from square.report_timing import build_timing_section
 from square.yaml_numeric import (
@@ -42,7 +43,6 @@ from square.yaml_numeric import (
     read_parameter_entry_float,
     read_parameter_entry_float_default,
     read_positive_parameter_microseconds,
-    read_scalar_float,
 )
 
 _REPORT_CONTRACT_VERSION = 10
@@ -92,90 +92,6 @@ def _build_physical_layer_snapshot(
         "parameter_keys": sorted(picked.keys()),
         "parameters": picked,
     }
-
-
-def _parse_table2_pins_early(
-    scenario: Mapping[str, Any], magic: Mapping[str, Any]
-) -> tuple[dict[str, Any], list[str]]:
-    """
-    Parse Table-2 RSA pins that do not depend on code distance (before heuristic ``d``).
-
-    :returns: Pin dict suitable for ``layout_estimate`` / dashboard, and warnings to extend.
-    """
-    local_warnings: list[str] = []
-    table2_block = scenario.get("table2_reference_row")
-    ccz_count: int | None = None
-    if isinstance(table2_block, dict):
-        ccz_count = _parse_ccz_count_from_table2(table2_block.get("value"))
-    if ccz_count is None and isinstance(table2_block, str):
-        ccz_count = _parse_ccz_count_from_table2(table2_block)
-
-    rsa2048_phys: float | None = None
-    phys_key: str | None = None
-    rsa2048_megaqd: float | None = None
-    mega_key: str | None = None
-    rsa2048_wall_days: float | None = None
-    wall_key: str | None = None
-    factory_param_key: str | None = None
-    table2_row_layout_descriptor: str | None = None
-
-    if ccz_count is not None:
-        row_ref = _table2_dashboard_row_ref(ccz_count)
-        phys_key = mega_key = wall_key = row_ref
-        t2_row = _table2_rsa2048_row_for_ccz(magic, ccz_count)
-        if t2_row is None:
-            local_warnings.append(
-                f"No row with ccz_factories={ccz_count} in magic YAML {_TABLE2_RSA2048_ROWS_KEY!r}; "
-                "Table 2 pins omitted."
-            )
-        else:
-            ld = t2_row.get("layout_descriptor")
-            table2_row_layout_descriptor = str(ld) if ld is not None else None
-            factory_param_key = table2_row_layout_descriptor
-            if "physical_qubits_millions" not in t2_row:
-                rsa2048_phys = None
-                local_warnings.append(
-                    f"Table 2 row {row_ref!r} missing physical_qubits_millions."
-                )
-            else:
-                rsa2048_phys = read_scalar_float(
-                    t2_row["physical_qubits_millions"],
-                    local_warnings,
-                    context=f"Table 2 row {row_ref!r} physical_qubits_millions",
-                )
-            if "megaqubit_days" not in t2_row:
-                rsa2048_megaqd = None
-                local_warnings.append(f"Table 2 row {row_ref!r} missing megaqubit_days.")
-            else:
-                rsa2048_megaqd = read_scalar_float(
-                    t2_row["megaqubit_days"],
-                    local_warnings,
-                    context=f"Table 2 row {row_ref!r} megaqubit_days",
-                )
-            if "wall_clock_days" not in t2_row:
-                rsa2048_wall_days = None
-                local_warnings.append(f"Table 2 row {row_ref!r} missing wall_clock_days.")
-            else:
-                rsa2048_wall_days = read_scalar_float(
-                    t2_row["wall_clock_days"],
-                    local_warnings,
-                    context=f"Table 2 row {row_ref!r} wall_clock_days",
-                )
-    elif table2_block is not None:
-        local_warnings.append("Could not parse CCZ factory count from table2_reference_row.value.")
-
-    pins = {
-        "ccz_count": ccz_count,
-        "rsa2048_phys": rsa2048_phys,
-        "phys_key": phys_key,
-        "rsa2048_megaqd": rsa2048_megaqd,
-        "mega_key": mega_key,
-        "rsa2048_wall_days": rsa2048_wall_days,
-        "wall_key": wall_key,
-        "factory_param_key": factory_param_key,
-        "table2_row_layout_descriptor": table2_row_layout_descriptor,
-    }
-    return pins, local_warnings
 
 
 def _scaling_reference_physical_qubits(
@@ -272,244 +188,8 @@ def _effective_physical_gate_error_stack(
     }
 
 
-_PINNED_SUFFIX_RE = re.compile(r"_n_(\d+)$")
-_CCZ_ROW_RE = re.compile(r"_(\d+)_ccz\b")
-
-_TABLE1_PINS_KEY = "paper_table1_pins_by_modulus_bit_length"
-_TABLE2_RSA2048_ROWS_KEY = "paper_table2_rsa2048_reference_rows"
-
-_ECDLP_DOCUMENT_IDS = frozenset({"ecdlp_secp256k1_babbush_et_al_2026"})
-_ECDLP_ENVELOPE_KEY = "ecdlp_logical_resource_envelopes_secp256k1"
-
-
 def _scenario_public_dict(scenario: Mapping[str, Any]) -> dict[str, Any]:
     return dict(scenario)
-
-
-def _parse_ccz_count_from_table2(row_value: Any) -> int | None:
-    if row_value is None:
-        return None
-    text = str(row_value)
-    m = _CCZ_ROW_RE.search(text)
-    return int(m.group(1)) if m else None
-
-
-def _pinned_algorithm_entries_for_n(algorithm: Mapping[str, Any], n: int) -> dict[str, Any]:
-    out: dict[str, Any] = {}
-    for key, val in algorithm.items():
-        if key in DOCUMENT_HEADER_KEYS or not isinstance(val, dict):
-            continue
-        m = _PINNED_SUFFIX_RE.search(str(key))
-        if m and int(m.group(1)) == n:
-            out[str(key)] = val
-    return out
-
-
-def _table1_pin_row(algo: Mapping[str, Any], n: int) -> dict[str, Any] | None:
-    """Return the Table 1 pin sub-map for modulus bit length ``n`` when present."""
-    entry = algo.get(_TABLE1_PINS_KEY)
-    if not isinstance(entry, dict):
-        return None
-    raw_val = entry.get("value")
-    if not isinstance(raw_val, dict):
-        return None
-    sub = raw_val.get(str(int(n)))
-    return sub if isinstance(sub, dict) else None
-
-
-def _table2_rsa2048_row_for_ccz(magic: Mapping[str, Any], ccz: int) -> dict[str, Any] | None:
-    """Match a Table 2 reference row by ``ccz_factories`` (RSA-2048 consolidated block)."""
-    entry = magic.get(_TABLE2_RSA2048_ROWS_KEY)
-    if not isinstance(entry, dict):
-        return None
-    rows = entry.get("value")
-    if not isinstance(rows, list):
-        return None
-    target = int(ccz)
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        raw = row.get("ccz_factories")
-        try:
-            if raw is not None and int(raw) == target:
-                return row
-        except (TypeError, ValueError):
-            continue
-    return None
-
-
-def _synthetic_pinned_from_table1(algo: Mapping[str, Any], n: int) -> dict[str, Any]:
-    """
-    Rebuild legacy-style pinned parameter keys from :pyattr:`_TABLE1_PINS_KEY` for ``algorithm_metrics``.
-    """
-    parent = algo.get(_TABLE1_PINS_KEY)
-    sub = _table1_pin_row(algo, n)
-    if not isinstance(parent, dict) or sub is None:
-        return {}
-    base = {
-        "confidence": parent.get("confidence"),
-        "source": parent.get("source"),
-        "date": parent.get("date"),
-        "section": parent.get("section"),
-        "layer": "algorithm",
-        "notes": f"Resolved from {_TABLE1_PINS_KEY} for n={n}.",
-    }
-    out: dict[str, Any] = {}
-    if "toffoli_plus_t_halves_billions" in sub:
-        out[f"toffoli_plus_t_halves_count_billions_n_{n}"] = {
-            **base,
-            "value": sub["toffoli_plus_t_halves_billions"],
-            "unit": "billions_of_toffoli_plus_t_halves",
-        }
-    if "minimum_spacetime_volume_megaqubit_days" in sub:
-        out[f"minimum_spacetime_volume_megaqubitdays_n_{n}"] = {
-            **base,
-            "value": sub["minimum_spacetime_volume_megaqubit_days"],
-            "unit": "megaqubit_days",
-        }
-    return out
-
-
-def _table2_dashboard_row_ref(ccz: int) -> str:
-    """Stable logical pointer into the consolidated Table 2 YAML block."""
-    return f"{_TABLE2_RSA2048_ROWS_KEY}#ccz_factories={int(ccz)}"
-
-
-def _engine_version() -> str:
-    try:
-        from importlib.metadata import PackageNotFoundError, version
-
-        return version("square")
-    except PackageNotFoundError:
-        return "0.0.0+unknown"
-
-
-def _resolve_ecdlp_variant(scenario: Mapping[str, Any], warnings: list[str]) -> str:
-    """Return scenario ``ecdlp_variant`` (default: low_toffoli_variant)."""
-    _raw_target = scenario.get("target")
-    tgt: dict[str, Any] = _raw_target if isinstance(_raw_target, dict) else {}
-    raw = tgt.get("ecdlp_variant")
-    if raw is None:
-        raw = scenario.get("ecdlp_variant")
-    if raw is None:
-        return "low_toffoli_variant"
-    s = str(raw).strip()
-    allowed = frozenset({"low_logical_qubit_variant", "low_toffoli_variant"})
-    if s in allowed:
-        return s
-    warnings.append(f"Unknown ecdlp_variant {raw!r}; using low_toffoli_variant.")
-    return "low_toffoli_variant"
-
-
-def _ecdlp_depth_multiplier(algo: Mapping[str, Any], warnings: list[str]) -> float:
-    """Layers per Toffoli for ``abstract_measurement_depth_layers`` (II.1)."""
-    raw = read_parameter_entry_float(
-        algo,
-        "ecdlp_measurement_depth_layers_per_toffoli_gate",
-        warnings,
-        context="paths.algorithm",
-    )
-    if raw is None:
-        return 1.0
-    if raw <= 0.0:
-        warnings.append(
-            "ecdlp_measurement_depth_layers_per_toffoli_gate must be positive; using 1.0 for depth multiplier."
-        )
-        return 1.0
-    return float(raw)
-
-
-def _ecdlp_headline_physical_upper_bound_narrative(algo: Mapping[str, Any]) -> float | None:
-    e = algo.get("headline_superconducting_physical_qubits_upper_bound")
-    if isinstance(e, dict) and e.get("value") is not None:
-        try:
-            return float(e["value"])
-        except (TypeError, ValueError):
-            return None
-    return None
-
-
-def _build_ecdlp_report_context(
-    algo: Mapping[str, Any],
-    scenario: Mapping[str, Any],
-    warnings: list[str],
-) -> dict[str, Any] | None:
-    """
-    Fixed-problem ECDLP profiles: fill ``evaluated`` logical qubits + depth proxy from cited envelopes.
-
-    Depth proxy (II.1): ``abstract_measurement_depth_layers`` =
-    ``toffoli_gates_upper_bound`` × ``ecdlp_measurement_depth_layers_per_toffoli_gate``.
-    """
-    if algo.get("document_id") not in _ECDLP_DOCUMENT_IDS:
-        return None
-
-    variant = _resolve_ecdlp_variant(scenario, warnings)
-    env_parent = algo.get(_ECDLP_ENVELOPE_KEY)
-    if not isinstance(env_parent, dict):
-        warnings.append(f"ECDLP algorithm missing {_ECDLP_ENVELOPE_KEY!r}; skipping ECDLP evaluation.")
-        return None
-    env_val = env_parent.get("value")
-    if not isinstance(env_val, dict) or variant not in env_val:
-        warnings.append(f"ECDLP envelope missing variant {variant!r}.")
-        return None
-    row = env_val.get(variant)
-    if not isinstance(row, dict):
-        warnings.append("ECDLP envelope variant row is not a mapping.")
-        return None
-    try:
-        lq = float(row["logical_qubits_upper_bound"])
-        tof = float(row["toffoli_gates_upper_bound"])
-    except (KeyError, TypeError, ValueError) as exc:
-        warnings.append(f"ECDLP envelope numeric fields invalid: {exc}")
-        return None
-
-    mult = _ecdlp_depth_multiplier(algo, warnings)
-    depth_layers = tof * mult
-    prov = "ecdlp_envelope_fixed_problem"
-
-    evaluated: dict[str, Any] = {
-        "abstract_logical_qubits": {
-            "value": lq,
-            "source_parameter": _ECDLP_ENVELOPE_KEY,
-            "provenance": prov,
-        },
-        "abstract_measurement_depth_layers": {
-            "value": depth_layers,
-            "source_parameter": _ECDLP_ENVELOPE_KEY,
-            "provenance": prov,
-            "depth_proxy": (
-                "toffoli_gates_upper_bound × ecdlp_measurement_depth_layers_per_toffoli_gate "
-                f"({tof} × {mult})"
-            ),
-        },
-    }
-
-    skipped = [src_key for src_key, _ in FORMULA_METRICS]
-    skipped.append("exponent_register_qubits_ne_asymptotic")
-
-    ecdlp_block: dict[str, Any] = {
-        "active": True,
-        "variant": variant,
-        "logical_qubits_upper_bound": lq,
-        "toffoli_gates_upper_bound": tof,
-        "ecdlp_measurement_depth_layers_per_toffoli_gate": mult,
-        "abstract_measurement_depth_layers_proxy": depth_layers,
-        "depth_proxy_rule": "toffoli_upper_bound_times_layers_per_toffoli_parameter",
-    }
-    headline_pb = _ecdlp_headline_physical_upper_bound_narrative(algo)
-    if headline_pb is not None:
-        ecdlp_block["paper_headline_physical_qubits_upper_bound_narrative"] = headline_pb
-
-    warnings.append(
-        "ECDLP mode: abstract_measurement_depth_layers is a Toffoli-derived proxy for heuristics, "
-        "not a compiled layer schedule from the undisclosed circuits."
-    )
-
-    return {
-        "evaluated": evaluated,
-        "evaluated_skipped": skipped,
-        "ecdlp_block": ecdlp_block,
-    }
 
 
 def _algorithm_metrics_block(
@@ -946,34 +626,20 @@ def build_scenario_report(
     target: dict[str, Any] = _raw_target if isinstance(_raw_target, dict) else {}
     algo = bundle.algorithm
 
-    ecdlp_ctx = _build_ecdlp_report_context(algo, scenario, warnings)
-    ecdlp_block_for_metrics: dict[str, Any] | None = None
+    fe = build_formula_evaluation_and_pins(
+        algo,
+        scenario,
+        target,
+        warnings,
+        modulus_bits_override=modulus_bits_override,
+    )
+    evaluated = fe.evaluated
+    evaluated_skipped = fe.evaluated_skipped
+    n = fe.n
+    ecdlp_block_for_metrics = fe.ecdlp_block_for_metrics
+    pinned = fe.pinned
 
-    evaluated: dict[str, Any] = {}
-    evaluated_skipped: list[str] = []
-    n: int | None = None
-
-    if ecdlp_ctx is not None:
-        evaluated = ecdlp_ctx["evaluated"]
-        evaluated_skipped = ecdlp_ctx["evaluated_skipped"]
-        ecdlp_block_for_metrics = ecdlp_ctx["ecdlp_block"]
-    else:
-        fm = evaluate_non_ecdlp_formula_metrics(
-            algo,
-            target,
-            modulus_bits_override=modulus_bits_override,
-            warnings=warnings,
-        )
-        evaluated = fm.evaluated
-        evaluated_skipped = fm.evaluated_skipped
-        n = fm.n
-
-    pinned = _pinned_algorithm_entries_for_n(algo, n) if n is not None else {}
-    if n is not None:
-        for k, v in _synthetic_pinned_from_table1(algo, n).items():
-            pinned.setdefault(k, v)
-
-    early_pins, early_table2_warnings = _parse_table2_pins_early(scenario, bundle.magic)
+    early_pins, early_table2_warnings = parse_table2_pins_early(scenario, bundle.magic)
     warnings.extend(early_table2_warnings)
     physical_stack = _effective_physical_gate_error_stack(
         modality=bundle.modality,
@@ -997,41 +663,9 @@ def build_scenario_report(
         physical_gate_error_rate_effective=p_effective_for_heuristic,
     )
 
-    patch_entry = bundle.qec.get("logical_qubit_patch_physical_qubit_count_formula")
-    patch_formula: str | None = None
-    if isinstance(patch_entry, dict) and isinstance(patch_entry.get("value"), str):
-        patch_formula = str(patch_entry["value"])
-
-    patch_physical_per_logical: float | None = None
-    qec_patch_status = "no_formula_in_profile"
-    qec_patch_eval_meta: dict[str, Any] | None = None
-
-    if patch_formula:
-        if d_resolved is None:
-            qec_patch_status = "pending_distance_d"
-            warnings.append(
-                "Surface-code patch formula is present but code distance d is not set "
-                "(use scenario qec_code_distance, qec.distance_policy heuristic, or --d); "
-                "physical qubits per logical are not computed."
-            )
-        elif int(d_resolved) < 1:
-            qec_patch_status = "invalid_distance_d"
-            warnings.append(
-                f"Surface-code patch formula skipped: code distance d={d_resolved!r} must be >= 1."
-            )
-        else:
-            try:
-                patch_physical_per_logical = eval_numeric_formula_with_bindings(
-                    patch_formula, {"d": float(d_resolved)}
-                )
-                qec_patch_status = "evaluated"
-                qec_patch_eval_meta = {
-                    "provenance": "computed_from_yaml_formula",
-                    "source_parameter": "logical_qubit_patch_physical_qubit_count_formula",
-                }
-            except (FormulaEvalError, ZeroDivisionError, OverflowError) as exc:
-                qec_patch_status = "eval_failed"
-                warnings.append(f"Could not evaluate QEC patch formula: {exc}")
+    patch_formula, patch_physical_per_logical, qec_patch_status, qec_patch_eval_meta = (
+        evaluate_patch_physical_per_logical(bundle.qec, d_resolved, warnings)
+    )
 
     ccz_count = early_pins["ccz_count"]
     rsa2048_phys = early_pins["rsa2048_phys"]
@@ -1046,7 +680,7 @@ def build_scenario_report(
     toffoli_b = None
     megaqd = None
     if n is not None:
-        t1 = _table1_pin_row(algo, n)
+        t1 = table1_pin_row(algo, n)
         if t1 is not None:
             raw_tb = t1.get("toffoli_plus_t_halves_billions")
             if raw_tb is not None:
@@ -1113,7 +747,7 @@ def build_scenario_report(
         modality=bundle.modality,
         scenario=scenario,
         table2_block=table2_block,
-        table2_rsa2048_rows_key=_TABLE2_RSA2048_ROWS_KEY,
+        table2_rsa2048_rows_key=TABLE2_RSA2048_ROWS_KEY,
         ecdlp_block_for_metrics=ecdlp_block_for_metrics,
         early_pins=early_pins,
         warnings=warnings,
@@ -1166,65 +800,65 @@ def build_scenario_report(
 
     sl = build_report_sources_and_layers(bundle, algo)
 
-    report: dict[str, Any] = {
-        "report_contract_version": _REPORT_CONTRACT_VERSION,
-        "engine": {"name": "square", "version": _engine_version()},
-        "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-        "warnings": warnings,
-        "scenario": _scenario_public_dict(scenario),
-        "target": dict(target) if isinstance(target, dict) else {},
-        "table2_reference": table2_block if isinstance(table2_block, dict) else None,
-        "sources": sl.sources,
-        "layers": sl.layers,
-        "algorithm_metrics": algo_metrics,
-        "qec_overhead": {
-            "logical_qubit_patch_physical_qubit_count": {
-                "formula": patch_formula,
-                "distance_d": d_resolved,
-                "physical_qubits_per_logical": patch_physical_per_logical,
-                "status": qec_patch_status,
-                **(qec_patch_eval_meta or {}),
-            }
-        },
-        "logical_fault_model": lfm,
-        "physical_rollup": physical_rollup,
-        "physical_layer": _build_physical_layer_snapshot(
+    dashboard = build_dashboard_fields(
+        ccz_count=ccz_count,
+        factory_param_key=factory_param_key,
+        table2_pinned_source_parameter=TABLE2_RSA2048_ROWS_KEY if ccz_count is not None else None,
+        table2_row_layout_descriptor=table2_row_layout_descriptor,
+        phys_key=phys_key,
+        rsa2048_phys=rsa2048_phys,
+        mega_key=mega_key,
+        rsa2048_megaqd=rsa2048_megaqd,
+        wall_key=wall_key,
+        rsa2048_wall_days=rsa2048_wall_days,
+        naive_serial_timing=naive_serial_timing,
+        evaluated=evaluated,
+        toffoli_b=toffoli_b,
+        megaqd=megaqd,
+        patch_physical_per_logical=patch_physical_per_logical,
+        approx_data_physical=approx_data_physical,
+        t_fallback_recommended=t_fallback_recommended,
+        t_transition=t_transition,
+        d_resolved=d_resolved,
+        qec_distance_resolution_mode=qec_distance_resolution.get("mode"),
+        derived_non_data_overhead_physical_qubits=derived_non_data_overhead_physical_qubits,
+        factory_footprint_from_yaml=factory_footprint_from_yaml,
+        schedule_model_v1=schedule_model_v1,
+        schedule_calibration=schedule_calibration,
+        ecdlp_block_for_metrics=ecdlp_block_for_metrics,
+    )
+
+    qec_overhead = {
+        "logical_qubit_patch_physical_qubit_count": {
+            "formula": patch_formula,
+            "distance_d": d_resolved,
+            "physical_qubits_per_logical": patch_physical_per_logical,
+            "status": qec_patch_status,
+            **(qec_patch_eval_meta or {}),
+        }
+    }
+
+    return assemble_report_shell(
+        report_contract_version=_REPORT_CONTRACT_VERSION,
+        warnings=warnings,
+        scenario=_scenario_public_dict(scenario),
+        target=dict(target) if isinstance(target, dict) else {},
+        table2_reference=table2_block if isinstance(table2_block, dict) else None,
+        sources=sl.sources,
+        layers=sl.layers,
+        algorithm_metrics=algo_metrics,
+        qec_overhead=qec_overhead,
+        logical_fault_model=lfm,
+        physical_rollup=physical_rollup,
+        physical_layer=_build_physical_layer_snapshot(
             sl.modality_parameters,
             document_id=sl.modality_header.get("document_id"),
         ),
-        "system_metrics": system_metrics_block,
-        "parameter_sensitivity": parameter_sensitivity_block,
-        "qec_distance_resolution": qec_distance_resolution,
-        "layout_estimate": layout_estimate,
-        "layout_optimization": layout_optimization,
-        "timing": timing_block,
-        "dashboard": build_dashboard_fields(
-            ccz_count=ccz_count,
-            factory_param_key=factory_param_key,
-            table2_pinned_source_parameter=_TABLE2_RSA2048_ROWS_KEY if ccz_count is not None else None,
-            table2_row_layout_descriptor=table2_row_layout_descriptor,
-            phys_key=phys_key,
-            rsa2048_phys=rsa2048_phys,
-            mega_key=mega_key,
-            rsa2048_megaqd=rsa2048_megaqd,
-            wall_key=wall_key,
-            rsa2048_wall_days=rsa2048_wall_days,
-            naive_serial_timing=naive_serial_timing,
-            evaluated=evaluated,
-            toffoli_b=toffoli_b,
-            megaqd=megaqd,
-            patch_physical_per_logical=patch_physical_per_logical,
-            approx_data_physical=approx_data_physical,
-            t_fallback_recommended=t_fallback_recommended,
-            t_transition=t_transition,
-            d_resolved=d_resolved,
-            qec_distance_resolution_mode=qec_distance_resolution.get("mode"),
-            derived_non_data_overhead_physical_qubits=derived_non_data_overhead_physical_qubits,
-            factory_footprint_from_yaml=factory_footprint_from_yaml,
-            schedule_model_v1=schedule_model_v1,
-            schedule_calibration=schedule_calibration,
-            ecdlp_block_for_metrics=ecdlp_block_for_metrics,
-        ),
-    }
-
-    return report
+        system_metrics=system_metrics_block,
+        parameter_sensitivity=parameter_sensitivity_block,
+        qec_distance_resolution=qec_distance_resolution,
+        layout_estimate=layout_estimate,
+        layout_optimization=layout_optimization,
+        timing=timing_block,
+        dashboard=dashboard,
+    )

@@ -5,12 +5,34 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from square.loader import _load_yaml, find_square_root, load_scenario_bundle
+from square.loader import (
+    _load_yaml,
+    find_square_root,
+    load_scenario_bundle,
+    resolve_path_under_square_root,
+)
 
 
 def test_find_square_root_from_repo() -> None:
     root = find_square_root()
     assert (root / "Assumptions" / "Schemas.yaml").is_file()
+
+
+def test_resolve_path_under_square_root_ok_and_rejects_escape(tmp_path: Path) -> None:
+    root = tmp_path / "proj"
+    cfg = root / "Configs"
+    cfg.mkdir(parents=True)
+    target = cfg / "a.yaml"
+    target.write_text("schema_version: 1\nscenario: x\n", encoding="utf-8")
+    assert resolve_path_under_square_root(root, "Configs/a.yaml") == target.resolve()
+    with pytest.raises(ValueError, match="escapes"):
+        resolve_path_under_square_root(root, "..")
+
+
+def test_resolve_path_under_square_root_rejects_empty() -> None:
+    root = find_square_root()
+    with pytest.raises(ValueError, match="Invalid path"):
+        resolve_path_under_square_root(root, "   ")
 
 
 def test_load_rsa2048_gidney_ekera_2021_parallel() -> None:

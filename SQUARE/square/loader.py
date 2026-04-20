@@ -56,6 +56,25 @@ def find_square_root(start: Path | None = None) -> Path:
     )
 
 
+def resolve_path_under_square_root(root: Path, rel: str) -> Path:
+    """
+    Resolve ``rel`` to an absolute path that must stay under ``root`` (same containment as scenario ``paths``).
+
+    Relative segments like ``..`` are canonicalized; escaping the root raises :class:`ValueError`.
+    If ``rel`` is absolute, it must still resolve under ``root``.
+    """
+    if not isinstance(rel, str) or not rel.strip():
+        raise ValueError(f"Invalid path reference: {rel!r}")
+    base = root.resolve()
+    raw = Path(rel)
+    candidate = (raw if raw.is_absolute() else base / raw).resolve()
+    try:
+        candidate.relative_to(base)
+    except ValueError as exc:
+        raise ValueError(f"Path escapes SQuaRE root: {rel!r}") from exc
+    return candidate
+
+
 def _load_yaml(path: Path) -> dict[str, Any]:
     with path.open(encoding="utf-8") as fh:
         data = yaml.safe_load(fh)
@@ -95,14 +114,7 @@ def load_scenario_bundle(
             raise KeyError(f"paths.{key} is required and must be non-empty")
 
     def _resolve(rel: str) -> Path:
-        if not isinstance(rel, str) or not rel.strip():
-            raise ValueError(f"Invalid path reference: {rel!r}")
-        candidate = (base / rel).resolve()
-        base_resolved = base.resolve()
-        try:
-            candidate.relative_to(base_resolved)
-        except ValueError as exc:
-            raise ValueError(f"Path escapes SQuaRE root: {rel!r}") from exc
+        candidate = resolve_path_under_square_root(base, rel)
         if not candidate.is_file():
             raise FileNotFoundError(f"Referenced file does not exist: {candidate}")
         return candidate

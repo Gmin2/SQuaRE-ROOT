@@ -176,3 +176,30 @@ def test_cli_mc_main_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert data["n_samples"] == 4
     assert "quantiles" in data
     assert data["mc_summary_contract_version"] == MC_SUMMARY_CONTRACT_VERSION
+
+
+def test_cli_mc_rejects_base_scenario_path_outside_root(tmp_path: Path) -> None:
+    """``base_scenario`` must resolve under ``--root`` (no absolute fallback outside the tree)."""
+    from square import cli_mc
+
+    root = find_square_root()
+    study = tmp_path / "bad_escape.yaml"
+    study.write_text(
+        "\n".join(
+            [
+                "schema_version: 1",
+                "study_id: bad_escape",
+                "description: test",
+                "scope: prior_predictive_only",
+                "base_scenario: ..",
+                "parameters:",
+                "  - parameter_key: characteristic_physical_gate_error_rate",
+                "    distribution: uniform",
+                "    low: 0.0005",
+                "    high: 0.002",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    code = cli_mc.main([str(study), "--samples", "1", "--root", str(root)])
+    assert code == 1
