@@ -19,6 +19,20 @@ Long-form comparisons are **not** split across many small markdown files. Use:
 - **SQuaRE** exposes **transparent stacks** under YAML assumptions. Outputs are **not** automatic proof of a paper’s headline paragraph.
 - When a bullet in `discrepancy_categories` applies, treat paper numbers and SQuaRE numbers as **different objects** unless you add pinned YAML rows that match the paper’s accounting.
 
+## MVP: flagship runs and what “validation” means here
+
+For a **stakeholder-ready** one-page scope list and the `square-mvp-demo` command, see [`mvp.md`](mvp.md).
+
+**Flagship scenarios** we point to for MVP demos:
+
+| Scenario | What validation claims |
+|----------|-------------------------|
+| `Configs/oratomic_gold_path.yaml` | Same stack as Cain et al. (2026) neutral atom + QLDPC + ECDLP envelope; **proxies and heuristics** per the Cain index entry — not a replication of their layout optimizer or schedule. |
+| `Configs/rsa2048_gidney_ekera_2021_parallel.yaml` | Gidney & Ekerå (2021) assumptions with **Table 2–style pins** where YAML provides them; still subject to output-contract **non-goals** (naive products, heuristic `d`, schedule calibration). |
+| `Configs/ecdlp_secp256k1_babbush_2026_low_toffoli.yaml` | Babbush et al. (2026) **logical envelope** on superconducting + surface; **no** analogous Table-2 pins — comparisons are narrative / envelope-level unless you add pins. |
+
+**Replication vs bracketing:** Index field `comparison_scope` and bullets under `discrepancy_categories` spell out what is **not** claimed. If a bullet applies, SQuaRE outputs are **bracketing or illustrative**, not a certified match to the paper’s headline paragraph.
+
 ---
 
 <a id="ecdlp-babbush-et-al-2026"></a>

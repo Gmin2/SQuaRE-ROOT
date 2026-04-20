@@ -2,6 +2,19 @@
 
 This repository is for the Standard Quantum Resource Estimation tool, known as SQuaRE, for gauging the resources needed to break encryption schemes, specifically ECC but others as well. The purpose of this tool is to inform and educate people on the threat of quantum computing enhanced attacks.
 
+## MVP (scope and stakeholder demo)
+
+**MVP today** means: a **transparent, YAML-driven** resource stack, a **versioned JSON report** (`docs/output-contract.md`), and **three flagship scenarios** documented in [`docs/mvp.md`](docs/mvp.md). It is **not** a browser UI with sliders, **not** every hardware modality or QEC family, and **not** automatic proof of every paper headline (see [`docs/validation_overview.md`](docs/validation_overview.md)).
+
+**One command** after install (from this `SQUARE/` directory) to print a readable Markdown report for your boss:
+
+```bash
+python -m pip install -e .
+square-mvp-demo
+```
+
+Same report as JSON: `square-mvp-demo --json`. RSA flagship instead of Oratomic: `square-mvp-demo Configs/rsa2048_gidney_ekera_2021_parallel.yaml`.
+
 ## Assumptions database
 
 Versioned quantitative assumptions live under `Assumptions/`:

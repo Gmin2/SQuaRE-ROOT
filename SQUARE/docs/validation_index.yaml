@@ -4,6 +4,8 @@
 # file: docs/validation_overview.md (one section per entry, anchor = overview_section_anchor).
 #
 # This file stays small and grep-friendly; avoid one markdown file per paper.
+#
+# MVP scope + stakeholder demo command: docs/mvp.md (square-mvp-demo).
 schema_version: 1
 
 entries:
