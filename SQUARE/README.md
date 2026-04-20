@@ -13,7 +13,7 @@ python -m pip install -e .
 square-mvp-demo
 ```
 
-Same report as JSON: `square-mvp-demo --json`. RSA flagship instead of Oratomic: `square-mvp-demo Configs/rsa2048_gidney_ekera_2021_parallel.yaml`.
+Same report as JSON: `square-mvp-demo --json`. RSA flagship instead of Oratomic: `square-mvp-demo Configs/rsa2048_gidney_ekera_2021_parallel.yaml`. If `square-mvp-demo` is not on `PATH`, use `python -m square.cli_demo` (same flags) from `SQUARE/` with the package installed.
 
 ## Assumptions database
 

@@ -76,7 +76,11 @@ def main(argv: list[str] | None = None) -> int:
     contract = report.get("report_contract_version")
 
     if args.json:
-        json.dump(report, sys.stdout, indent=2)
+        try:
+            json.dump(report, sys.stdout, indent=2, allow_nan=False)
+        except ValueError as exc:
+            print(f"square-mvp-demo: cannot serialize report to JSON: {exc}", file=sys.stderr)
+            return 1
         sys.stdout.write("\n")
         return 0
 
@@ -94,3 +98,7 @@ def main(argv: list[str] | None = None) -> int:
     sys.stdout.write(report_to_markdown(report))
     sys.stdout.write("\n")
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

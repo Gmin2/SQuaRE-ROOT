@@ -107,3 +107,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Wrote summary (quantiles, moments, correlations) -> {out_json.resolve()}")
     print(f"sampling_strategy={result.summary.get('sampling_strategy')} n_jobs={result.summary.get('n_jobs')}")
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

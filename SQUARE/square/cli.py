@@ -58,6 +58,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.markdown:
         sys.stdout.write(report_to_markdown(report))
     else:
-        json.dump(report, sys.stdout, indent=2)
+        try:
+            json.dump(report, sys.stdout, indent=2, allow_nan=False)
+        except ValueError as exc:
+            print(f"square-report: cannot serialize report to JSON: {exc}", file=sys.stderr)
+            return 1
         sys.stdout.write("\n")
     return 0

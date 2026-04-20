@@ -1,4 +1,4 @@
-"""Tests for phenomenological surface-code distance heuristic."""
+"""Tests for phenomenological union-bound code-distance heuristic."""
 
 from __future__ import annotations
 
@@ -8,14 +8,19 @@ import pytest
 from square.qec_distance_heuristic import (
     min_odd_distance_discrete_scan,
     suggest_surface_code_distance_union_bound,
+    suggest_union_bound_code_distance,
 )
+
+
+def test_union_bound_alias_is_same_callable() -> None:
+    assert suggest_surface_code_distance_union_bound is suggest_union_bound_code_distance
 
 
 def test_suggest_d_rsa2048_baseline_matches_report_golden() -> None:
     n = 2048
     lq = 3 * n + 0.002 * n * math.log2(n)
     dp = 500 * n**2 + n**2 * math.log2(n)
-    d, meta = suggest_surface_code_distance_union_bound(
+    d, meta = suggest_union_bound_code_distance(
         physical_gate_error_rate=0.001,
         logical_qubit_count=lq,
         qec_cycle_count_proxy=dp,
@@ -50,7 +55,7 @@ def test_discrete_scan_first_feasible_is_min_odd_d() -> None:
 
 
 def test_p_above_threshold_clamps() -> None:
-    d, meta = suggest_surface_code_distance_union_bound(
+    d, meta = suggest_union_bound_code_distance(
         physical_gate_error_rate=0.02,
         logical_qubit_count=100.0,
         qec_cycle_count_proxy=1e6,

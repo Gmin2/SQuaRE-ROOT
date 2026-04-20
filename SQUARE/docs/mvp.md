@@ -31,6 +31,13 @@ JSON instead of Markdown:
 square-mvp-demo --json
 ```
 
+Module form (same entrypoint as `square-mvp-demo` when the package is on `PYTHONPATH`):
+
+```bash
+python -m square.cli_demo
+python -m square.cli_demo --json
+```
+
 RSA-2048 flagship instead of Oratomic:
 
 ```bash

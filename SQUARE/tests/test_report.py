@@ -254,9 +254,9 @@ def test_oratomic_gold_path_report() -> None:
     assert "oratomic_gold_path" in md
 
 
-def test_build_report_surfaces_qcvv_qem_layers_when_loaded() -> None:
+def test_build_report_surfaces_qcvv_qem_layers_when_loaded(tmp_path: Path) -> None:
     root = find_square_root()
-    scen = root / "Configs" / "_test_qcvv_qem_report.yaml"
+    scen = tmp_path / "_test_qcvv_qem_report.yaml"
     scen.write_text(
         "schema_version: 1\nscenario: _test_qcvv_qem_report\ntarget:\n  modulus_bit_length: 2048\n"
         "  problem: rsa_integer_factoring\nqec:\n  distance_policy: heuristic_union_bound\n"
@@ -271,26 +271,23 @@ def test_build_report_surfaces_qcvv_qem_layers_when_loaded() -> None:
         "  qem: Assumptions/QEM/identity_no_overhead.yaml\n",
         encoding="utf-8",
     )
-    try:
-        report = build_scenario_report(load_scenario_bundle(scen, root=root))
-        assert report["layers"]["qcvv"] is not None
-        assert report["layers"]["qcvv"]["header"]["document_id"] == "qcvv_identity_no_overhead"
-        assert report["layers"]["qem"] is not None
-        assert report["layers"]["qem"]["header"]["document_id"] == "qem_identity_no_overhead"
-        assert report["sources"]["qcvv"]["document_id"] == "qcvv_identity_no_overhead"
-        assert report["sources"]["qem"]["document_id"] == "qem_identity_no_overhead"
-        smq = report["system_metrics"]
-        assert smq["validated_error_rate_ver"] == pytest.approx(0.001)
-        lob_q = smq["logical_operations_budget_lob"]
-        assert lob_q is not None
-        assert smq["mitigated_operations_ceiling"] == pytest.approx(float(lob_q))
-        md = report_to_markdown(report)
-        assert "qcvv" in md
-        assert "qem" in md
-        assert "VER" in md
-        assert "Mitigated operations ceiling" in md
-    finally:
-        scen.unlink(missing_ok=True)
+    report = build_scenario_report(load_scenario_bundle(scen, root=root))
+    assert report["layers"]["qcvv"] is not None
+    assert report["layers"]["qcvv"]["header"]["document_id"] == "qcvv_identity_no_overhead"
+    assert report["layers"]["qem"] is not None
+    assert report["layers"]["qem"]["header"]["document_id"] == "qem_identity_no_overhead"
+    assert report["sources"]["qcvv"]["document_id"] == "qcvv_identity_no_overhead"
+    assert report["sources"]["qem"]["document_id"] == "qem_identity_no_overhead"
+    smq = report["system_metrics"]
+    assert smq["validated_error_rate_ver"] == pytest.approx(0.001)
+    lob_q = smq["logical_operations_budget_lob"]
+    assert lob_q is not None
+    assert smq["mitigated_operations_ceiling"] == pytest.approx(float(lob_q))
+    md = report_to_markdown(report)
+    assert "qcvv" in md
+    assert "qem" in md
+    assert "VER" in md
+    assert "Mitigated operations ceiling" in md
 
 
 def test_build_report_with_code_distance_evaluates_patch_and_rollup() -> None:
