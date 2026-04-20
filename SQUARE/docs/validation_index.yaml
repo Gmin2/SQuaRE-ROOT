@@ -41,6 +41,7 @@ entries:
   - id: ecdlp_secp256k1_cain_et_al_2026_neutral_atom_qldpc
     algorithm_document_id: ecdlp_secp256k1_babbush_et_al_2026
     example_scenario: Configs/ecdlp_secp256k1_cain_2026_neutral_atom_qldpc.yaml
+    gold_path_scenario: Configs/oratomic_gold_path.yaml
     primary_reference: >-
       Cain, M., Xu, Q., King, R., Picard, L. R. B., Levine, H., Endres, M., Preskill, J., Huang, H.-Y., &
       Bluvstein, D. Shor's algorithm is possible with as few as 10,000 reconfigurable atomic qubits.

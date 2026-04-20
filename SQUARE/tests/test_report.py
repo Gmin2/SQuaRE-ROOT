@@ -204,6 +204,56 @@ def test_build_report_physical_layer_cain_neutral_atom() -> None:
     assert report["logical_fault_model"]["logical_cycle_time"]["logical_cycle_time_microseconds"] == 40.0
 
 
+def test_oratomic_gold_path_report() -> None:
+    """Stable Oratomic gold path: same stack as Cain neutral-atom ECDLP; pinned for demos and CI."""
+    root = find_square_root()
+    scenario = root / "Configs" / "oratomic_gold_path.yaml"
+    bundle = load_scenario_bundle(scenario, root=root)
+    report = build_scenario_report(bundle)
+
+    assert report["scenario"]["scenario"] == "oratomic_gold_path"
+    assert report["report_contract_version"] == 10
+
+    pl = report["physical_layer"]
+    assert pl["document_id"] == "neutral_atom_cain_et_al_2026"
+    assert pl["status"] == "passthrough_from_modality"
+    assert pl["parameters"]["coherence_time_t1_microseconds"]["value"] == 15000.0
+
+    assert report["layers"]["qec"]["header"]["document_id"] == "qldpc_cain_et_al_2026"
+    assert report["layers"]["modality"]["header"]["document_id"] == "neutral_atom_cain_et_al_2026"
+
+    lfm = report["logical_fault_model"]
+    assert lfm["status"] == "computed"
+    assert lfm["exponent_half_distance"] == 8
+    assert lfm["logical_error_rate_per_cycle"] == pytest.approx(4.5423445187769087e-13)
+    assert lfm["logical_cycle_time"]["logical_cycle_time_microseconds"] == 40.0
+
+    qdr = report["qec_distance_resolution"]
+    assert qdr["mode"] == "heuristic_union_bound"
+    assert qdr["distance_d"] == 15
+
+    ecdlp = report["algorithm_metrics"]["ecdlp"]
+    assert ecdlp["active"] is True
+    assert ecdlp["variant"] == "low_toffoli_variant"
+    assert ecdlp["logical_qubits_upper_bound"] == 1450
+    assert ecdlp["toffoli_gates_upper_bound"] == 70_000_000
+
+    sm = report["system_metrics"]
+    assert sm["schema"] == "system_metrics_v2"
+    assert sm["status"] == "partial"
+    assert sm["logical_qubit_capacity_lqc"] is None
+    p_l = float(lfm["logical_error_rate_per_cycle"])
+    assert sm["logical_operations_budget_lob"] == pytest.approx(0.1 / p_l)
+    assert sm["headroom_logical_depth"] == pytest.approx(0.1 / p_l - 70_000_000.0)
+    assert sm["quantum_operations_throughput_qot"] == pytest.approx(25_000.0)
+
+    assert report["parameter_sensitivity"]["status"] == "computed"
+
+    json.dumps(report)
+    md = report_to_markdown(report)
+    assert "oratomic_gold_path" in md
+
+
 def test_build_report_surfaces_qcvv_qem_layers_when_loaded() -> None:
     root = find_square_root()
     scen = root / "Configs" / "_test_qcvv_qem_report.yaml"
