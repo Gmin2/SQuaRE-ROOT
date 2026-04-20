@@ -60,7 +60,7 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     with path.open(encoding="utf-8") as fh:
         data = yaml.safe_load(fh)
     if data is None:
-        return {}
+        raise ValueError(f"YAML root is null or empty (no document mapping): {path}")
     if not isinstance(data, dict):
         raise TypeError(f"Expected mapping at root of {path}, got {type(data).__name__}")
     return data

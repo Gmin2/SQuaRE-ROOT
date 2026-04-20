@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from square.loader import find_square_root, load_scenario_bundle
+from square.loader import _load_yaml, find_square_root, load_scenario_bundle
 
 
 def test_find_square_root_from_repo() -> None:
@@ -56,9 +56,9 @@ def test_load_scenario_missing_path_raises() -> None:
         bad.unlink(missing_ok=True)
 
 
-def test_load_optional_qcvv_and_qem_paths() -> None:
+def test_load_optional_qcvv_and_qem_paths(tmp_path: Path) -> None:
     root = find_square_root()
-    scen = root / "Configs" / "_test_qcvv_qem_bundle.yaml"
+    scen = tmp_path / "_test_qcvv_qem_bundle.yaml"
     scen.write_text(
         "schema_version: 1\nscenario: _test_qcvv_qem\npaths:\n"
         "  modality: Assumptions/Modalities/superconducting_gidney_ekera_2021.yaml\n"
@@ -69,14 +69,18 @@ def test_load_optional_qcvv_and_qem_paths() -> None:
         "  qem: Assumptions/QEM/identity_no_overhead.yaml\n",
         encoding="utf-8",
     )
-    try:
-        bundle = load_scenario_bundle(scen, root=root)
-        assert bundle.qcvv is not None
-        assert bundle.qcvv["document_id"] == "qcvv_identity_no_overhead"
-        assert bundle.qem is not None
-        assert bundle.qem["document_id"] == "qem_identity_no_overhead"
-    finally:
-        scen.unlink(missing_ok=True)
+    bundle = load_scenario_bundle(scen, root=root)
+    assert bundle.qcvv is not None
+    assert bundle.qcvv["document_id"] == "qcvv_identity_no_overhead"
+    assert bundle.qem is not None
+    assert bundle.qem["document_id"] == "qem_identity_no_overhead"
+
+
+def test_load_yaml_raises_on_empty_document(tmp_path: Path) -> None:
+    empty = tmp_path / "empty.yaml"
+    empty.write_text("", encoding="utf-8")
+    with pytest.raises(ValueError, match="null or empty"):
+        _load_yaml(empty)
 
 
 def test_load_ecdlp_secp256k1_babbush_2026_low_toffoli() -> None:

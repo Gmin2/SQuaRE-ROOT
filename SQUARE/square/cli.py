@@ -48,6 +48,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
+    if args.d is not None and args.d < 1:
+        print("square-report: --d must be a positive integer (>= 1).", file=sys.stderr)
+        return 2
+
     bundle = load_scenario_bundle(args.scenario)
     report = build_scenario_report(
         bundle,

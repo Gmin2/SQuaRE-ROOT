@@ -10,6 +10,16 @@ from square.loader import ScenarioBundle
 from square.mc.overrides import apply_numeric_overrides
 from square.report import build_scenario_report
 
+# Dashboard keys (metric_name, dashboard_field) extracted into MC metric dict keys.
+MC_DASHBOARD_METRIC_FIELDS: tuple[tuple[str, str], ...] = (
+    ("naive_serial_time_days", "naive_serial_time_days_from_depth_times_cycle"),
+    ("code_distance_d", "code_distance_d"),
+    ("approximate_data_plane_physical_qubits", "approximate_data_plane_physical_qubits"),
+    ("logical_qubits_at_n", "logical_qubits_at_n"),
+)
+
+MC_ECDLP_METRIC_KEY = "ecdlp_toffoli_gates_upper_bound"
+
 
 @dataclass(frozen=True)
 class ForwardModelResult:
@@ -21,24 +31,16 @@ class ForwardModelResult:
 def extract_default_mc_metrics(report: Mapping[str, Any]) -> dict[str, float | None]:
     dash = report.get("dashboard")
     if not isinstance(dash, dict):
-        return {
-            "naive_serial_time_days": None,
-            "code_distance_d": None,
-            "approximate_data_plane_physical_qubits": None,
-            "logical_qubits_at_n": None,
-        }
+        return {metric_key: None for metric_key, _ in MC_DASHBOARD_METRIC_FIELDS}
 
     out: dict[str, float | None] = {
-        "naive_serial_time_days": _as_float(dash.get("naive_serial_time_days_from_depth_times_cycle")),
-        "code_distance_d": _as_float(dash.get("code_distance_d")),
-        "approximate_data_plane_physical_qubits": _as_float(dash.get("approximate_data_plane_physical_qubits")),
-        "logical_qubits_at_n": _as_float(dash.get("logical_qubits_at_n")),
+        metric_key: _as_float(dash.get(dash_key)) for metric_key, dash_key in MC_DASHBOARD_METRIC_FIELDS
     }
     am = report.get("algorithm_metrics")
     if isinstance(am, dict) and am.get("ecdlp"):
         e = am["ecdlp"]
         if isinstance(e, dict):
-            out["ecdlp_toffoli_gates_upper_bound"] = _as_float(e.get("toffoli_gates_upper_bound"))
+            out[MC_ECDLP_METRIC_KEY] = _as_float(e.get("toffoli_gates_upper_bound"))
     return out
 
 
