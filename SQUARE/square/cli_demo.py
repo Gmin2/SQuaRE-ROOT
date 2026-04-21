@@ -47,7 +47,7 @@ def main(argv: list[str] | None = None) -> int:
     CLI entry for ``square-mvp-demo``: build a report and print Markdown (or JSON with ``--json``).
 
     :param argv: Arguments excluding the program name; defaults to ``sys.argv[1:]``.
-    :returns: Process exit code (0 on success, 2 if the scenario file is missing).
+    :returns: Exit code ``0`` success, ``1`` load/build/emit failure, ``2`` missing scenario file.
     """
     parser = argparse.ArgumentParser(
         prog="square-mvp-demo",
@@ -65,23 +65,48 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Emit the full machine-readable JSON report instead of Markdown.",
     )
+    parser.add_argument(
+        "--root",
+        type=Path,
+        default=None,
+        help="SQuaRE project root (directory with Assumptions/Schemas.yaml); inferred if omitted.",
+    )
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
-    root = find_square_root()
+    root = (
+        args.root.resolve()
+        if args.root is not None
+        else find_square_root(args.scenario if args.scenario is not None else None)
+    )
     scenario_path = _resolve_scenario_path(args.scenario, root)
     if scenario_path is None:
         return 2
-    bundle = load_scenario_bundle(scenario_path, root=root)
-    report = build_scenario_report(bundle)
+
+    try:
+        bundle = load_scenario_bundle(
+            scenario_path,
+            root=root,
+            require_scenario_under_root=True,
+        )
+    except (FileNotFoundError, TypeError, ValueError) as exc:
+        print(f"square-mvp-demo: cannot load scenario: {exc}", file=sys.stderr)
+        return 1
+
+    try:
+        report = build_scenario_report(bundle)
+    except (TypeError, ValueError) as exc:
+        print(f"square-mvp-demo: cannot build report: {exc}", file=sys.stderr)
+        return 1
+
     contract = report.get("report_contract_version")
 
     if args.json:
         try:
             json.dump(report, sys.stdout, indent=2, allow_nan=False)
-        except ValueError as exc:
-            print(f"square-mvp-demo: cannot serialize report to JSON: {exc}", file=sys.stderr)
+            sys.stdout.write("\n")
+        except (BrokenPipeError, OSError, ValueError) as exc:
+            print(f"square-mvp-demo: cannot serialize or write JSON: {exc}", file=sys.stderr)
             return 1
-        sys.stdout.write("\n")
         return 0
 
     banner_lines = [
@@ -90,13 +115,17 @@ def main(argv: list[str] | None = None) -> int:
         f"Scenario: {scenario_path.name}  (id: {report.get('scenario', {}).get('scenario', '')})",
         f"Machine-readable contract: report_contract_version={contract} — see docs/output-contract.md",
         "Key JSON blocks for tooling: dashboard, system_metrics, logical_fault_model, layers, timing.",
-        f"MVP scope and claims: { (root / 'docs' / 'mvp.md').as_posix() }",
+        f"MVP scope and claims: {(root / 'docs' / 'mvp.md').as_posix()}",
         "=" * 72,
         "",
     ]
-    sys.stdout.write("\n".join(banner_lines))
-    sys.stdout.write(report_to_markdown(report))
-    sys.stdout.write("\n")
+    try:
+        sys.stdout.write("\n".join(banner_lines))
+        sys.stdout.write(report_to_markdown(report))
+        sys.stdout.write("\n")
+    except (AttributeError, BrokenPipeError, KeyError, OSError, TypeError, ValueError) as exc:
+        print(f"square-mvp-demo: cannot render Markdown: {exc}", file=sys.stderr)
+        return 1
     return 0
 
 

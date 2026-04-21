@@ -69,7 +69,7 @@ def main(argv: list[str] | None = None) -> int:
             root=root,
             require_scenario_under_root=True,
         )
-    except (FileNotFoundError, KeyError, TypeError, ValueError) as exc:
+    except (FileNotFoundError, TypeError, ValueError) as exc:
         print(f"square-report: cannot load scenario: {exc}", file=sys.stderr)
         return 1
     try:
@@ -85,14 +85,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.markdown:
         try:
             sys.stdout.write(report_to_markdown(report))
-        except (AttributeError, KeyError, OSError, TypeError, ValueError) as exc:
+        except (AttributeError, BrokenPipeError, KeyError, OSError, TypeError, ValueError) as exc:
             print(f"square-report: cannot render Markdown: {exc}", file=sys.stderr)
             return 1
     else:
         try:
             json.dump(report, sys.stdout, indent=2, allow_nan=False)
-        except ValueError as exc:
-            print(f"square-report: cannot serialize report to JSON: {exc}", file=sys.stderr)
+            sys.stdout.write("\n")
+        except (BrokenPipeError, OSError, ValueError) as exc:
+            print(f"square-report: cannot serialize or write JSON: {exc}", file=sys.stderr)
             return 1
-        sys.stdout.write("\n")
     return 0

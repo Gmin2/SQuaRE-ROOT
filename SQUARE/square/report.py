@@ -38,12 +38,14 @@ from square.report_timing import build_timing_section
 from square.yaml_numeric import (
     read_evaluated_metric_float,
     read_modality_characteristic_gate_error,
+    read_modality_nominal_gate_error_for_heuristic,
     read_parameter_entry_float,
     read_parameter_entry_float_default,
     read_positive_parameter_microseconds,
 )
 
-_REPORT_CONTRACT_VERSION = 10
+_REPORT_CONTRACT_VERSION = 12
+REPORT_CONTRACT_VERSION = _REPORT_CONTRACT_VERSION
 
 # Curated modality keys surfaced under top-level ``physical_layer`` (OSRE native physical layer).
 OSRE_EXTENDED_PHYSICAL_PARAMETER_KEYS: frozenset[str] = frozenset(
@@ -126,13 +128,17 @@ def _effective_physical_gate_error_stack(
     warnings: list[str],
 ) -> dict[str, Any]:
     """
-    Nominal modality gate error, QCVV multiplier, scaling penalty, and effective ``p`` for heuristics.
+    Nominal modality gate-error proxy, QCVV multiplier, scaling penalty, and effective ``p`` for heuristics.
 
+    ``p_nominal`` is chosen by :func:`square.yaml_numeric.read_modality_nominal_gate_error_for_heuristic`
+    (``max(1Q, 2Q)`` when both extended rates exist, else a single extended rate, else characteristic).
     ``p_effective = p_nominal × σ_QCVV × (1 + α log N + β N)`` when ``p_nominal`` is defined; ``N`` is
     :func:`_scaling_reference_physical_qubits`. Coefficients ``α``, ``β`` default to ``0`` from QEC YAML
     ``heuristic_scaling_penalty_log_coefficient`` / ``heuristic_scaling_penalty_linear_coefficient``.
     """
-    p_nominal = read_modality_characteristic_gate_error(modality, warnings, context="paths.modality")
+    p_nominal, p_nominal_gate_proxy_method, characteristic_ref = read_modality_nominal_gate_error_for_heuristic(
+        modality, warnings, context="paths.modality"
+    )
     sigma = 1.0
     if qcvv_doc is not None:
         s_opt = read_parameter_entry_float(
@@ -177,6 +183,8 @@ def _effective_physical_gate_error_stack(
 
     return {
         "p_nominal": p_nominal,
+        "p_nominal_gate_proxy_method": p_nominal_gate_proxy_method,
+        "characteristic_physical_gate_error_rate": characteristic_ref,
         "qcvv_multiplier_sigma": sigma,
         "scaling_penalty_log_coefficient_alpha": alpha,
         "scaling_penalty_linear_coefficient_beta": beta,
@@ -328,7 +336,7 @@ def _build_logical_fault_model_block(
         exponent_half_distance = (d_int + 1) // 2
         if p_phys >= p_th:
             warnings.append(
-                "logical_fault_model: characteristic_physical_gate_error_rate >= "
+                "logical_fault_model: effective physical_gate_error_rate >= "
                 "heuristic_surface_code_physical_threshold_order_of_magnitude; phenomenological "
                 "logical_error_rate_per_cycle omitted (model assumes p_phys < p_th)."
             )
@@ -401,6 +409,9 @@ def _build_logical_fault_model_block(
     }
     if physical_error_stack is not None:
         for key in (
+            "p_nominal",
+            "p_nominal_gate_proxy_method",
+            "characteristic_physical_gate_error_rate",
             "qcvv_multiplier_sigma",
             "scaling_penalty_log_coefficient_alpha",
             "scaling_penalty_linear_coefficient_beta",
@@ -410,6 +421,9 @@ def _build_logical_fault_model_block(
         ):
             if key in physical_error_stack:
                 inputs[key] = physical_error_stack[key]
+
+    # VER (system_metrics) still multiplies QCVV σ by headline characteristic only, not ``p_nominal``.
+    inputs["ver_grounded_on_characteristic_only"] = True
 
     return {
         "schema": "logical_fault_model_v1",
@@ -877,4 +891,4 @@ def build_scenario_report(
     )
 
 
-__all__ = ["build_scenario_report", "report_to_markdown"]
+__all__ = ["REPORT_CONTRACT_VERSION", "build_scenario_report", "report_to_markdown"]

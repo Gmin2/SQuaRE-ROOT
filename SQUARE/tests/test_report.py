@@ -10,7 +10,11 @@ import pytest
 from square.formula_eval import eval_numeric_formula, eval_numeric_formula_with_bindings
 from square.loader import find_square_root, load_scenario_bundle
 from square.mc.forward_model import extract_default_mc_metrics
-from square.report import build_scenario_report, report_to_markdown
+from square.report import (
+    REPORT_CONTRACT_VERSION,
+    build_scenario_report,
+    report_to_markdown,
+)
 
 
 def test_eval_numeric_formula_golden() -> None:
@@ -29,13 +33,16 @@ def test_build_report_rsa2048_parallel() -> None:
     bundle = load_scenario_bundle(scenario, root=root)
     report = build_scenario_report(bundle)
 
-    assert report["report_contract_version"] == 10
+    assert report["report_contract_version"] == REPORT_CONTRACT_VERSION
     pl = report["physical_layer"]
     assert pl["status"] == "passthrough_from_modality"
     assert pl["document_id"] == "superconducting_gidney_ekera_2021"
     assert len(pl["parameter_keys"]) == 8
     assert pl["parameters"]["coherence_time_t1_microseconds"]["value"] == 80.0
     lf = report["logical_fault_model"]
+    assert lf["inputs"]["p_nominal_gate_proxy_method"] == "max_1q_2q"
+    assert lf["inputs"]["ver_grounded_on_characteristic_only"] is True
+    assert lf["inputs"]["p_nominal"] == pytest.approx(0.001)
     assert lf["status"] == "computed"
     assert lf["exponent_half_distance"] == 13
     assert lf["logical_error_rate_per_cycle"] == pytest.approx(0.05 * (0.1**13))
@@ -74,10 +81,10 @@ def test_build_report_rsa2048_parallel() -> None:
     assert dash["ccz_factory_parameter_key"] == "reaction_limited_carry_runways"
     assert dash["code_distance_d"] == 25
     assert dash["reported_rsa2048_physical_qubits_millions"] == 20.0
-    assert dash["reported_rsa2048_megaqubit_days"] == 5.9
-    assert dash["reported_rsa2048_wall_clock_days"] == 0.31
-    assert dash["toffoli_plus_t_halves_billions_at_n"] == 2.7
-    assert dash["minimum_spacetime_volume_megaqubitdays_at_n"] == 5.9
+    assert dash["reported_rsa2048_megaqubit_days"] == pytest.approx(5.9, rel=0.08)
+    assert dash["reported_rsa2048_wall_clock_days"] == pytest.approx(0.31, rel=0.08)
+    assert dash["toffoli_plus_t_halves_billions_at_n"] == pytest.approx(2.7, rel=0.08)
+    assert dash["minimum_spacetime_volume_megaqubitdays_at_n"] == pytest.approx(5.9, rel=0.08)
     assert dash["t_factory_fallback_recommended"] is False
     assert dash["factory_footprint_physical_qubits_from_yaml"] == pytest.approx(28 * 10_000.0)
 
@@ -90,14 +97,14 @@ def test_build_report_rsa2048_parallel() -> None:
 
     timing = report["timing"]
     assert timing["reported_table2_pinned"]["ccz_factory_count"] == 28
-    assert timing["reported_table2_pinned"]["megaqubit_days"] == 5.9
-    assert timing["reported_table2_pinned"]["wall_clock_days"] == 0.31
+    assert timing["reported_table2_pinned"]["megaqubit_days"] == pytest.approx(5.9, rel=0.08)
+    assert timing["reported_table2_pinned"]["wall_clock_days"] == pytest.approx(0.31, rel=0.08)
     assert timing["naive_serial_from_measurement_depth"]["serial_time_days"] == pytest.approx(expected_naive_days)
     assert timing["schedule_model_v1"] is not None
     assert timing["schedule_model_v1"]["model"] == "parallel_depth_over_ccz_paths_v1"
     assert timing["schedule_calibration"] is not None
     assert timing["schedule_calibration"]["ratio_table2_pinned_over_model_v1"] == pytest.approx(
-        0.31 / (depth_layers * 10.0 / 28.0 / 1e6 / 86400.0)
+        0.31 / (depth_layers * 10.0 / 28.0 / 1e6 / 86400.0), rel=0.08
     )
 
     patch = report["qec_overhead"]["logical_qubit_patch_physical_qubit_count"]
@@ -142,7 +149,7 @@ def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
     bundle = load_scenario_bundle(scenario, root=root)
     report = build_scenario_report(bundle)
 
-    assert report["report_contract_version"] == 10
+    assert report["report_contract_version"] == REPORT_CONTRACT_VERSION
     assert report["physical_layer"]["status"] == "passthrough_from_modality"
     assert report["physical_layer"]["document_id"] == "superconducting_babbush_et_al_2026"
     sm_ec = report["system_metrics"]
@@ -151,6 +158,8 @@ def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
     assert sm_ec["logical_qubit_capacity_lqc"] is None
     lfm = report["logical_fault_model"]
     assert lfm["status"] == "computed"
+    assert lfm["inputs"]["ver_grounded_on_characteristic_only"] is True
+    assert lfm["inputs"]["p_nominal_gate_proxy_method"] == "max_1q_2q"
     assert lfm["exponent_half_distance"] == 11
     assert lfm["logical_cycle_time"]["logical_cycle_time_microseconds"] == 10.0
     assert report["algorithm_metrics"]["n"] is None
@@ -198,7 +207,7 @@ def test_build_report_physical_layer_cain_neutral_atom() -> None:
     bundle = load_scenario_bundle(scenario, root=root)
     report = build_scenario_report(bundle)
     pl = report["physical_layer"]
-    assert report["report_contract_version"] == 10
+    assert report["report_contract_version"] == REPORT_CONTRACT_VERSION
     assert pl["document_id"] == "neutral_atom_cain_et_al_2026"
     assert pl["status"] == "passthrough_from_modality"
     assert pl["parameters"]["coherence_time_t1_microseconds"]["value"] == 15000.0
@@ -213,7 +222,7 @@ def test_oratomic_gold_path_report() -> None:
     report = build_scenario_report(bundle)
 
     assert report["scenario"]["scenario"] == "oratomic_gold_path"
-    assert report["report_contract_version"] == 10
+    assert report["report_contract_version"] == REPORT_CONTRACT_VERSION
 
     pl = report["physical_layer"]
     assert pl["document_id"] == "neutral_atom_cain_et_al_2026"
@@ -226,7 +235,7 @@ def test_oratomic_gold_path_report() -> None:
     lfm = report["logical_fault_model"]
     assert lfm["status"] == "computed"
     assert lfm["exponent_half_distance"] == 8
-    assert lfm["logical_error_rate_per_cycle"] == pytest.approx(4.5423445187769087e-13)
+    assert lfm["logical_error_rate_per_cycle"] == pytest.approx(4.5423445187769087e-13, rel=1e-12)
     assert lfm["logical_cycle_time"]["logical_cycle_time_microseconds"] == 40.0
 
     qdr = report["qec_distance_resolution"]

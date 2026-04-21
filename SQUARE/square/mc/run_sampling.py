@@ -37,6 +37,34 @@ class MonteCarloRunResult:
     summary: dict[str, Any]
 
 
+def _float_column_loose(rows: Sequence[Mapping[str, Any]], col: str) -> list[float]:
+    """Coerce ``col`` to floats per row; skip ``None`` and non-numeric values."""
+    vals: list[float] = []
+    for r in rows:
+        v = r.get(col)
+        if v is None:
+            continue
+        try:
+            vals.append(float(v))
+        except (TypeError, ValueError):
+            continue
+    return vals
+
+
+def _float_column_strict_all_rows(rows: Sequence[Mapping[str, Any]], col: str) -> list[float] | None:
+    """Coerce ``col`` for every row; return ``None`` if any row is missing or non-numeric."""
+    vals: list[float] = []
+    for r in rows:
+        v = r.get(col)
+        if v is None:
+            return None
+        try:
+            vals.append(float(v))
+        except (TypeError, ValueError):
+            return None
+    return vals
+
+
 def _linear_quantile(sorted_vals: list[float], q: float) -> float:
     if not sorted_vals:
         return float("nan")
@@ -56,15 +84,7 @@ def _quantile_summary_for_columns(
 ) -> dict[str, dict[str, float]]:
     out: dict[str, dict[str, float]] = {}
     for col in columns:
-        vals: list[float] = []
-        for r in rows:
-            v = r.get(col)
-            if v is None:
-                continue
-            try:
-                vals.append(float(v))
-            except (TypeError, ValueError):
-                continue
+        vals = _float_column_loose(rows, col)
         if not vals:
             out[col] = {}
             continue
@@ -83,15 +103,7 @@ def _moment_summary_for_columns(
 ) -> dict[str, dict[str, float]]:
     out: dict[str, dict[str, float]] = {}
     for col in columns:
-        vals: list[float] = []
-        for r in rows:
-            v = r.get(col)
-            if v is None:
-                continue
-            try:
-                vals.append(float(v))
-            except (TypeError, ValueError):
-                continue
+        vals = _float_column_loose(rows, col)
         n = len(vals)
         if n == 0:
             out[col] = {}
@@ -133,19 +145,8 @@ def _pairwise_correlations(
     """Pearson correlation for columns that have numeric values on every row."""
     series: dict[str, list[float]] = {}
     for col in columns:
-        vals: list[float] = []
-        ok = True
-        for r in rows:
-            v = r.get(col)
-            if v is None:
-                ok = False
-                break
-            try:
-                vals.append(float(v))
-            except (TypeError, ValueError):
-                ok = False
-                break
-        if ok and len(vals) >= 2:
+        vals = _float_column_strict_all_rows(rows, col)
+        if vals is not None and len(vals) >= 2:
             series[col] = vals
     keys = sorted(series)
     out: dict[str, dict[str, float | None]] = {}

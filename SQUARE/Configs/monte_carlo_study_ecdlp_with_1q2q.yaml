@@ -1,0 +1,35 @@
+# Monte Carlo: ECDLP scenario with priors over 1Q/2Q gate rates (aligns heuristic p_nominal with MC).
+schema_version: 1
+study_id: mc_ecdlp_gate_rates_and_cycle_priors
+description: >-
+  Same base as monte_carlo_study_ecdlp_example.yaml, plus narrow uniforms on single/two-qubit gate errors.
+
+scope: prior_predictive_only
+
+base_scenario: Configs/ecdlp_secp256k1_babbush_2026_low_toffoli.yaml
+
+parameters:
+  - parameter_key: characteristic_physical_gate_error_rate
+    distribution: uniform
+    low: 0.0005
+    high: 0.002
+
+  - parameter_key: single_qubit_gate_error_rate
+    distribution: uniform
+    low: 0.0004
+    high: 0.0008
+
+  - parameter_key: two_qubit_gate_error_rate
+    distribution: uniform
+    low: 0.0008
+    high: 0.0012
+
+  - parameter_key: surface_code_cycle_time
+    distribution: log_uniform
+    low: 0.5
+    high: 2.0
+
+  - parameter_key: heuristic_surface_code_physical_threshold_order_of_magnitude
+    distribution: uniform
+    low: 0.005
+    high: 0.02

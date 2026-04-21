@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 import pytest
 from square.cli_demo import main
@@ -29,6 +30,40 @@ def test_square_mvp_demo_json(capsys: pytest.CaptureFixture[str]) -> None:
     out = capsys.readouterr().out
     assert '"report_contract_version"' in out
     assert '"oratomic_gold_path"' in out
+
+
+def test_square_mvp_demo_json_from_empty_cwd_with_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = find_square_root()
+    monkeypatch.chdir(tmp_path)
+    code = main(["--json", "--root", str(root)])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert '"oratomic_gold_path"' in out
+
+
+def test_square_mvp_demo_returns_1_on_invalid_scenario(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = find_square_root()
+    bad = tmp_path / "bad.yaml"
+    bad.write_text("schema_version: 1\nscenario: bad\npaths: not_a_mapping\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    code = main([str(bad), "--root", str(root)])
+    assert code == 1
+    err = capsys.readouterr().err
+    assert "square-mvp-demo:" in err
+
+
+def test_square_mvp_demo_returns_2_when_scenario_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = find_square_root()
+    monkeypatch.chdir(tmp_path)
+    code = main(["Configs/does_not_exist_scenario_xyz.yaml", "--root", str(root)])
+    assert code == 2
+    assert "not found" in capsys.readouterr().err
 
 
 def test_square_mvp_demo_rsa_scenario(capsys: pytest.CaptureFixture[str]) -> None:

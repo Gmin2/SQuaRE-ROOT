@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import yaml
 from square.loader import (
     _load_yaml,
     find_square_root,
@@ -27,6 +28,14 @@ def test_resolve_path_under_square_root_ok_and_rejects_escape(tmp_path: Path) ->
     assert resolve_path_under_square_root(root, "Configs/a.yaml") == target.resolve()
     with pytest.raises(ValueError, match="escapes"):
         resolve_path_under_square_root(root, "..")
+
+
+def test_load_scenario_bundle_rejects_non_mapping_paths(tmp_path: Path) -> None:
+    root = find_square_root()
+    bad = tmp_path / "bad_paths.yaml"
+    bad.write_text("schema_version: 1\nscenario: x\npaths: inline_string\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="paths"):
+        load_scenario_bundle(bad, root=root)
 
 
 def test_resolve_path_under_square_root_rejects_empty() -> None:
@@ -81,6 +90,21 @@ def test_load_scenario_bundle_require_scenario_under_root_raises(tmp_path: Path)
     outside.write_text("schema_version: 1\nscenario: x\npaths: {}\n", encoding="utf-8")
     with pytest.raises(ValueError, match="must lie under SQuaRE root"):
         load_scenario_bundle(outside, root=root, require_scenario_under_root=True)
+
+
+def test_rsa_parallel_and_qcvv_qem_companion_paths_match_except_qcvv_qem() -> None:
+    """Companion scenario must stay aligned with baseline ``paths.*`` (step-2 wiring guard)."""
+    root = find_square_root()
+    base = yaml.safe_load((root / "Configs" / "rsa2048_gidney_ekera_2021_parallel.yaml").read_text(encoding="utf-8"))
+    wired = yaml.safe_load(
+        (root / "Configs" / "rsa2048_gidney_ekera_2021_parallel_qcvv_qem.yaml").read_text(encoding="utf-8")
+    )
+    pb = base["paths"]
+    pw = wired["paths"]
+    assert pw["qcvv"] == "Assumptions/QCVV/identity_no_overhead.yaml"
+    assert pw["qem"] == "Assumptions/QEM/identity_no_overhead.yaml"
+    for k in ("modality", "qec_code", "magic", "algorithm", "magic_aux"):
+        assert pb[k] == pw[k]
 
 
 def test_load_repo_flagship_qcvv_qem_companion_scenarios() -> None:

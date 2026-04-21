@@ -26,7 +26,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "study",
-        type=str,
+        type=Path,
         help="Path to Monte Carlo study YAML (e.g. Configs/monte_carlo_study_ecdlp_example.yaml).",
     )
     parser.add_argument(
@@ -87,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         spec = load_monte_carlo_study_spec(args.study, root=root)
-        scenario_path = resolve_path_under_square_root(root, spec.base_scenario)
+        scenario_path = resolve_path_under_square_root(root, str(spec.base_scenario))
     except (FileNotFoundError, TypeError, ValueError) as exc:
         print(f"square-mc: {exc}", file=sys.stderr)
         return 1
@@ -109,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
             n_jobs=args.jobs,
             sampling_strategy=args.sampling,
         )
-    except (FileNotFoundError, KeyError, TypeError, ValueError) as exc:
+    except (FileNotFoundError, TypeError, ValueError) as exc:
         print(f"square-mc: {exc}", file=sys.stderr)
         return 1
 
@@ -127,9 +127,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"square-mc: {exc}", file=sys.stderr)
         return 1
 
-    print(f"Wrote {len(result.rows)} rows -> {out_csv.resolve()}")
-    print(f"Wrote summary (quantiles, moments, correlations) -> {out_json.resolve()}")
-    print(f"sampling_strategy={result.summary.get('sampling_strategy')} n_jobs={result.summary.get('n_jobs')}")
+    try:
+        print(f"Wrote {len(result.rows)} rows -> {out_csv.resolve()}")
+        print(f"Wrote summary (quantiles, moments, correlations) -> {out_json.resolve()}")
+        print(
+            f"sampling_strategy={result.summary.get('sampling_strategy')} "
+            f"n_jobs={result.summary.get('n_jobs')}"
+        )
+    except OSError as exc:
+        print(f"square-mc: cannot write status to stdout: {exc}", file=sys.stderr)
+        return 1
     return 0
 
 

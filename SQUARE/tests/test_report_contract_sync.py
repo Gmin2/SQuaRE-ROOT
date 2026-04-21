@@ -18,3 +18,6 @@ def test_output_contract_doc_matches_report_contract_version_constant() -> None:
         f"docs/output-contract.md must mention contract version {v} "
         "in the envelope table (see report_contract_version row)."
     )
+    assert f"| `{v}` |" in doc, (
+        f"docs/output-contract.md contract history table must include a row for version {v}."
+    )

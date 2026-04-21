@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from square.cli import main
 from square.loader import find_square_root
+from square.report import REPORT_CONTRACT_VERSION
 
 
 def test_square_report_cli_rejects_non_positive_distance_override() -> None:
@@ -56,5 +57,5 @@ def test_square_report_cli_writes_valid_json_to_stdout(
     assert code == 0
     out = capsys.readouterr().out.strip()
     data = json.loads(out)
-    assert data["report_contract_version"] == 10
+    assert data["report_contract_version"] == REPORT_CONTRACT_VERSION
     assert "dashboard" in data

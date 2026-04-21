@@ -14,6 +14,8 @@ from typing import Any
 
 import yaml
 
+from square.yaml_validate import validate_assumption_document_header
+
 _SCHEMA_MARKER = Path("Assumptions") / "Schemas.yaml"
 
 
@@ -118,12 +120,12 @@ def load_scenario_bundle(
 
     paths = scenario.get("paths")
     if not isinstance(paths, dict):
-        raise KeyError("Scenario file must contain a mapping 'paths' with file references.")
+        raise ValueError("Scenario file must contain a mapping 'paths' with file references.")
 
     required = ("modality", "qec_code", "magic", "algorithm")
     for key in required:
         if key not in paths or not paths[key]:
-            raise KeyError(f"paths.{key} is required and must be non-empty")
+            raise ValueError(f"paths.{key} is required and must be non-empty")
 
     def _resolve(rel: str) -> Path:
         candidate = resolve_path_under_square_root(base, rel)
@@ -131,25 +133,42 @@ def load_scenario_bundle(
             raise FileNotFoundError(f"Referenced file does not exist: {candidate}")
         return candidate
 
-    modality = _load_yaml(_resolve(str(paths["modality"])))
-    qec = _load_yaml(_resolve(str(paths["qec_code"])))
-    magic = _load_yaml(_resolve(str(paths["magic"])))
-    algorithm = _load_yaml(_resolve(str(paths["algorithm"])))
+    modality_path = _resolve(str(paths["modality"]))
+    modality = _load_yaml(modality_path)
+    validate_assumption_document_header(modality, source=str(modality_path))
+
+    qec_path = _resolve(str(paths["qec_code"]))
+    qec = _load_yaml(qec_path)
+    validate_assumption_document_header(qec, source=str(qec_path))
+
+    magic_path = _resolve(str(paths["magic"]))
+    magic = _load_yaml(magic_path)
+    validate_assumption_document_header(magic, source=str(magic_path))
+
+    algo_path = _resolve(str(paths["algorithm"]))
+    algorithm = _load_yaml(algo_path)
+    validate_assumption_document_header(algorithm, source=str(algo_path))
 
     magic_aux: dict[str, Any] | None = None
     aux = paths.get("magic_aux")
     if aux is not None and str(aux).strip():
-        magic_aux = _load_yaml(_resolve(str(aux)))
+        aux_p = _resolve(str(aux))
+        magic_aux = _load_yaml(aux_p)
+        validate_assumption_document_header(magic_aux, source=str(aux_p))
 
     qcvv_doc: dict[str, Any] | None = None
     qcvv_path = paths.get("qcvv")
     if qcvv_path is not None and str(qcvv_path).strip():
-        qcvv_doc = _load_yaml(_resolve(str(qcvv_path)))
+        q_p = _resolve(str(qcvv_path))
+        qcvv_doc = _load_yaml(q_p)
+        validate_assumption_document_header(qcvv_doc, source=str(q_p))
 
     qem_doc: dict[str, Any] | None = None
     qem_path = paths.get("qem")
     if qem_path is not None and str(qem_path).strip():
-        qem_doc = _load_yaml(_resolve(str(qem_path)))
+        em_p = _resolve(str(qem_path))
+        qem_doc = _load_yaml(em_p)
+        validate_assumption_document_header(qem_doc, source=str(em_p))
 
     return ScenarioBundle(
         scenario=scenario,

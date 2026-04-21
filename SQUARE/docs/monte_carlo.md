@@ -14,6 +14,8 @@ Sample uncertain parameters **θ** from priors in a study YAML, evaluate the det
 - :func:`square.mc.evaluate_forward_model` — patches modality/QEC numeric `parameter_entry` values, runs :func:`square.report.build_scenario_report`.
 - Supported θ keys: :data:`square.mc.PARAMETER_LAYERS`.
 
+**Engine vs MC (v12+):** Reports build heuristic ``p_effective`` from modality ``p_nominal`` = ``max(single_qubit_gate_error_rate, two_qubit_gate_error_rate)`` when both OSRE extended rates are usable, else fallbacks (see ``docs/output-contract.md`` § ``logical_fault_model`` / contract history v11–v12). As of **v12**, ``PARAMETER_LAYERS`` includes those two extended keys so ``square-mc`` can vary the same rates the heuristic uses for ``p_nominal`` (alongside ``characteristic_physical_gate_error_rate`` and other modality/QEC entries in the map).
+
 ## Study YAML
 
 - ``base_scenario``: path under SQuaRE root to a scenario file.

@@ -24,6 +24,33 @@ from square.mc.overrides import apply_numeric_overrides
 
 def test_parameter_layers_nonempty() -> None:
     assert "characteristic_physical_gate_error_rate" in PARAMETER_LAYERS
+    assert PARAMETER_LAYERS["single_qubit_gate_error_rate"] == "modality"
+    assert PARAMETER_LAYERS["two_qubit_gate_error_rate"] == "modality"
+
+
+def test_apply_numeric_overrides_two_qubit_changes_p_nominal_in_report() -> None:
+    root = find_square_root()
+    bundle = load_scenario_bundle(
+        root / "Configs" / "ecdlp_secp256k1_babbush_2026_low_toffoli.yaml",
+        root=root,
+    )
+    from square.report import build_scenario_report
+
+    base = build_scenario_report(bundle)
+    assert base["logical_fault_model"]["inputs"]["p_nominal"] == pytest.approx(0.001)
+    b2 = apply_numeric_overrides(bundle, {"two_qubit_gate_error_rate": 0.009})
+    r2 = build_scenario_report(b2)
+    assert r2["logical_fault_model"]["inputs"]["p_nominal"] == pytest.approx(0.009)
+
+
+def test_monte_carlo_study_with_1q2q_parameters_runs() -> None:
+    root = find_square_root()
+    spec = load_monte_carlo_study_spec(root / "Configs" / "monte_carlo_study_ecdlp_with_1q2q.yaml", root=root)
+    assert spec.study_id == "mc_ecdlp_gate_rates_and_cycle_priors"
+    assert len(spec.parameters) == 5
+    bundle = load_scenario_bundle(root / spec.base_scenario, root=root)
+    result = run_monte_carlo_study(spec, bundle, n_samples=6, seed=42, include_full_report=False)
+    assert len(result.rows) == 6
 
 
 def test_evaluate_forward_model_baseline_matches_report() -> None:
@@ -46,7 +73,7 @@ def test_apply_numeric_overrides_unknown_key() -> None:
         root / "Configs" / "ecdlp_secp256k1_babbush_2026_low_toffoli.yaml",
         root=root,
     )
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError, match="Unknown override parameter"):
         apply_numeric_overrides(bundle, {"not_a_parameter": 1.0})
 
 

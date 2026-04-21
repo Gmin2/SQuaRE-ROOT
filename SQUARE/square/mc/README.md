@@ -13,7 +13,7 @@
 
 ## Parallelism
 
-`n_jobs > 1` uses `ThreadPoolExecutor` and a **shared** loaded `ScenarioBundle`. Each draw calls `apply_numeric_overrides`, which builds **shallow** copies of the modality/QEC document roots and **`deepcopy`s only the overridden `parameter_entry` nodes** (not full trees). Speedup is **not** guaranteed on CPU-bound CPython due to the GIL; use for moderate `n_samples` or profile on your machine.
+`n_jobs > 1` uses `ThreadPoolExecutor` and a **shared** loaded `ScenarioBundle`. Each draw calls `apply_numeric_overrides`, which builds **shallow** copies of the modality/QEC document roots and **`deepcopy`s only the overridden `parameter_entry` nodes** (not full trees). **Correctness assumes** the report pipeline treats loaded YAML documents as **read-only** except via those explicit copies; do not mutate nested dicts in place during `build_scenario_report`. Speedup is **not** guaranteed on CPU-bound CPython due to the GIL; use for moderate `n_samples` or profile on your machine.
 
 ## CLI
 
