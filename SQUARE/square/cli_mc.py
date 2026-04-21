@@ -17,6 +17,7 @@ from square.mc import (
     write_mc_samples_csv,
     write_mc_summary_json,
 )
+from square.plotting import write_mc_semantics_png
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -72,6 +73,18 @@ def main(argv: list[str] | None = None) -> int:
         choices=("independent", "latin_hypercube"),
         default=None,
         help="Override study YAML sampling.strategy (latin_hypercube requires all uniform parameters).",
+    )
+    parser.add_argument(
+        "--plot",
+        action="store_true",
+        help="After the run, write a PNG of MC distributions (failure proxy, magic multiplier, θ scatter).",
+    )
+    parser.add_argument(
+        "--plot-output",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="PNG path for --plot (default: mc_samples_<study_id>_semantics.png in cwd).",
     )
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
@@ -137,6 +150,18 @@ def main(argv: list[str] | None = None) -> int:
     except OSError as exc:
         print(f"square-mc: cannot write status to stdout: {exc}", file=sys.stderr)
         return 1
+
+    if args.plot:
+        plot_path = args.plot_output
+        if plot_path is None:
+            plot_path = Path(f"mc_samples_{spec.study_id}_semantics.png")
+        try:
+            write_mc_semantics_png(plot_path, result.rows)
+            print(f"Wrote MC semantics plot -> {plot_path.resolve()}")
+        except RuntimeError as exc:
+            print(f"square-mc: --plot failed: {exc}", file=sys.stderr)
+            return 3
+
     return 0
 
 

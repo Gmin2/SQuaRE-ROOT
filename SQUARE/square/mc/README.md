@@ -17,4 +17,4 @@
 
 ## CLI
 
-See repo `docs/monte_carlo.md` and `square-mc` in `pyproject.toml`.
+See repo `docs/monte_carlo.md` and `square-mc` in `pyproject.toml`. With optional **matplotlib** (`pip install -e ".[plots]"`), pass **`--plot`** to write a semantics PNG next to the CSV; or run `python scripts/plot_mc_csv.py` on an existing sample file.

@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from square.loader import find_square_root, load_scenario_bundle
+from square.plotting import write_report_semantics_png
 from square.report import build_scenario_report, report_to_markdown
 
 
@@ -52,6 +53,18 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="SQuaRE project root (directory with Assumptions/Schemas.yaml); inferred from scenario path if omitted.",
     )
+    parser.add_argument(
+        "--plot",
+        action="store_true",
+        help="Also write a PNG of failure proxy, magic throughput, and schedule text (needs matplotlib).",
+    )
+    parser.add_argument(
+        "--plot-output",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="PNG path for --plot (default: <scenario_stem>_report_semantics.png in cwd).",
+    )
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
     if args.d is not None and args.d < 1:
@@ -81,6 +94,17 @@ def main(argv: list[str] | None = None) -> int:
     except (TypeError, ValueError) as exc:
         print(f"square-report: cannot build report: {exc}", file=sys.stderr)
         return 1
+
+    if args.plot:
+        plot_path = args.plot_output
+        if plot_path is None:
+            plot_path = Path(f"{args.scenario.stem}_report_semantics.png")
+        try:
+            write_report_semantics_png(plot_path, report)
+            print(f"square-report: wrote plot -> {plot_path.resolve()}", file=sys.stderr)
+        except RuntimeError as exc:
+            print(f"square-report: --plot failed: {exc}", file=sys.stderr)
+            return 3
 
     if args.markdown:
         try:
