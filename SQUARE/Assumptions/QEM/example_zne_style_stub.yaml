@@ -1,0 +1,31 @@
+# Illustrative QEM profile: modest logical-error suppression with non-trivial sampling overhead.
+document_id: qem_example_zne_style_stub
+schema_version: 1
+primary_reference: >-
+  SQuaRE illustrative ZNE-style stub — not a fit to a specific experiment; demonstrates how
+  ``effective_logical_error_rate_suppression_factor`` and ``sampling_shot_overhead_multiplier``
+  surface in ``system_metrics`` (LOB uses s on p_L; mitigated ceiling uses Γ).
+date_issued: "2026-04-20"
+notes: >
+  s < 1 increases LOB = ε/(p_L×s). Γ > 1 lowers mitigated_operations_ceiling = LOB/Γ.
+  Replace with protocol-calibrated QEM YAML when modeling a named mitigation stack.
+
+effective_logical_error_rate_suppression_factor:
+  value: 0.85
+  unit: "dimensionless"
+  confidence: speculative
+  source: "SQuaRE illustrative order-of-magnitude (not paper-pinned)"
+  date: "2026-04-20"
+  section: "SQuaRE QEM example"
+  notes: Interpreted as s_QEM in LOB denominator alongside phenomenological p_L.
+  layer: qem
+
+sampling_shot_overhead_multiplier:
+  value: 4.0
+  unit: "dimensionless"
+  confidence: speculative
+  source: "SQuaRE illustrative sampling cost (e.g. extrapolation shots order-of-magnitude)"
+  date: "2026-04-20"
+  section: "SQuaRE QEM example"
+  notes: Used as Γ in mitigated_operations_ceiling = LOB / Γ.
+  layer: qem

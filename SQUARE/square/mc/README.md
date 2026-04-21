@@ -13,7 +13,7 @@
 
 ## Parallelism
 
-`n_jobs > 1` uses `ThreadPoolExecutor` and a **shared** loaded `ScenarioBundle` (each evaluation deep-copies modality/QEC in `apply_numeric_overrides`). Speedup is **not** guaranteed on CPU-bound CPython due to the GIL; use for moderate `n_samples` or profile on your machine.
+`n_jobs > 1` uses `ThreadPoolExecutor` and a **shared** loaded `ScenarioBundle`. Each draw calls `apply_numeric_overrides`, which builds **shallow** copies of the modality/QEC document roots and **`deepcopy`s only the overridden `parameter_entry` nodes** (not full trees). Speedup is **not** guaranteed on CPU-bound CPython due to the GIL; use for moderate `n_samples` or profile on your machine.
 
 ## CLI
 

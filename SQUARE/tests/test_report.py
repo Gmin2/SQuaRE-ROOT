@@ -291,6 +291,46 @@ def test_build_report_surfaces_qcvv_qem_layers_when_loaded(tmp_path: Path) -> No
     assert "Mitigated operations ceiling" in md
 
 
+def test_rsa_parallel_identity_qcvv_qem_repo_scenario_matches_baseline_heuristics() -> None:
+    """Repo ``*_qcvv_qem`` RSA scenario: identity QCVV/QEM → same ``d`` / LOB as baseline; VER and ceiling populated."""
+    root = find_square_root()
+    base = build_scenario_report(
+        load_scenario_bundle(root / "Configs" / "rsa2048_gidney_ekera_2021_parallel.yaml", root=root)
+    )
+    wired = build_scenario_report(
+        load_scenario_bundle(root / "Configs" / "rsa2048_gidney_ekera_2021_parallel_qcvv_qem.yaml", root=root)
+    )
+    assert wired["layers"]["qcvv"] is not None
+    assert wired["layers"]["qem"] is not None
+    assert wired["sources"]["qcvv"]["document_id"] == "qcvv_identity_no_overhead"
+    assert wired["sources"]["qem"]["document_id"] == "qem_identity_no_overhead"
+    assert base["qec_distance_resolution"]["distance_d"] == wired["qec_distance_resolution"]["distance_d"]
+    assert base["dashboard"]["code_distance_d"] == wired["dashboard"]["code_distance_d"]
+    assert wired["system_metrics"]["validated_error_rate_ver"] == pytest.approx(0.001)
+    lob_b = float(base["system_metrics"]["logical_operations_budget_lob"])
+    lob_w = float(wired["system_metrics"]["logical_operations_budget_lob"])
+    assert lob_w == pytest.approx(lob_b)
+    assert wired["system_metrics"]["mitigated_operations_ceiling"] == pytest.approx(lob_w)
+
+
+def test_illustrative_ecdlp_qcvv_qem_repo_scenario_ver_and_mitigated_ceiling() -> None:
+    """Illustrative QCVV σ=1.15 and QEM Γ=4: VER and mitigated ceiling match contract formulas."""
+    root = find_square_root()
+    report = build_scenario_report(
+        load_scenario_bundle(
+            root / "Configs" / "ecdlp_secp256k1_babbush_2026_low_toffoli_illustrative_qcvv_qem.yaml",
+            root=root,
+        )
+    )
+    assert report["layers"]["qcvv"]["header"]["document_id"] == "qcvv_benchmarking_operational_error_sigma_1_15"
+    assert report["layers"]["qem"]["header"]["document_id"] == "qem_example_zne_style_stub"
+    sm = report["system_metrics"]
+    assert sm["validated_error_rate_ver"] == pytest.approx(0.001 * 1.15)
+    lob = sm["logical_operations_budget_lob"]
+    assert lob is not None
+    assert sm["mitigated_operations_ceiling"] == pytest.approx(float(lob) / 4.0)
+
+
 def test_build_report_with_code_distance_evaluates_patch_and_rollup() -> None:
     root = find_square_root()
     scenario = root / "Configs" / "rsa2048_gidney_ekera_2021_parallel.yaml"

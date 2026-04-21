@@ -87,12 +87,8 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         spec = load_monte_carlo_study_spec(args.study, root=root)
-    except (FileNotFoundError, TypeError, ValueError) as exc:
-        print(f"square-mc: {exc}", file=sys.stderr)
-        return 1
-    try:
         scenario_path = resolve_path_under_square_root(root, spec.base_scenario)
-    except ValueError as exc:
+    except (FileNotFoundError, TypeError, ValueError) as exc:
         print(f"square-mc: {exc}", file=sys.stderr)
         return 1
     if not scenario_path.is_file():
@@ -102,17 +98,20 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    bundle = load_scenario_bundle(scenario_path, root=root, require_scenario_under_root=True)
-
-    result = run_monte_carlo_study(
-        spec,
-        bundle,
-        n_samples=args.samples,
-        seed=args.seed,
-        include_full_report=False,
-        n_jobs=args.jobs,
-        sampling_strategy=args.sampling,
-    )
+    try:
+        bundle = load_scenario_bundle(scenario_path, root=root, require_scenario_under_root=True)
+        result = run_monte_carlo_study(
+            spec,
+            bundle,
+            n_samples=args.samples,
+            seed=args.seed,
+            include_full_report=False,
+            n_jobs=args.jobs,
+            sampling_strategy=args.sampling,
+        )
+    except (FileNotFoundError, KeyError, TypeError, ValueError) as exc:
+        print(f"square-mc: {exc}", file=sys.stderr)
+        return 1
 
     out_csv = args.output_csv
     if out_csv is None:

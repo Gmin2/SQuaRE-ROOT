@@ -10,6 +10,8 @@ This page states **what the current MVP is** and **what it is not**, so stakehol
 | [`../Configs/rsa2048_gidney_ekera_2021_parallel.yaml`](../Configs/rsa2048_gidney_ekera_2021_parallel.yaml) | RSA-2048 stack with Gidney & Ekerå (2021) assumptions and **Table 2–style** pinned references in magic YAML. |
 | [`../Configs/ecdlp_secp256k1_babbush_2026_low_toffoli.yaml`](../Configs/ecdlp_secp256k1_babbush_2026_low_toffoli.yaml) | Same ECDLP logical envelope on **superconducting + surface** (Babbush et al. 2026 headline comparison). |
 
+**QCVV / QEM wiring (optional demos):** Baseline files above omit `paths.qcvv` / `paths.qem` so reports stay minimal. Companion configs `oratomic_gold_path_qcvv_qem.yaml`, `rsa2048_gidney_ekera_2021_parallel_qcvv_qem.yaml`, and `ecdlp_secp256k1_babbush_2026_low_toffoli_qcvv_qem.yaml` attach **identity** profiles (no multiplier change). For illustrative non-identity multipliers see `ecdlp_secp256k1_babbush_2026_low_toffoli_illustrative_qcvv_qem.yaml` and `../Configs/README.md`.
+
 ## What we claim vs what we ship
 
 - **Transparent accounting:** Every bundled default is traceable to YAML (`source`, `confidence`, `date`, optional DOI). The engine **does not invent citations**.

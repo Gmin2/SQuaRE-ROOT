@@ -1,0 +1,30 @@
+# Same stack as ``rsa2048_gidney_ekera_2021_parallel.yaml`` with QCVV + QEM paths wired (identity placeholders).
+# Baseline RSA scenario omits these paths so Table-2-style demos stay unchanged; use this file when you need
+# ``layers.qcvv`` / ``layers.qem`` and VER / mitigated_operations_ceiling slots populated without altering multipliers.
+schema_version: 1
+scenario: rsa2048_gidney_ekera_2021_parallel_qcvv_qem
+description: >-
+  RSA-2048 parallel row (Gidney & Ekerå 2021) with ``paths.qcvv`` and ``paths.qem`` set to identity
+  placeholders (σ=1, s=1, Γ=1). Effective resource numbers match the baseline scenario; report extras
+  include VER = nominal gate rate and mitigated ceiling = LOB.
+
+target:
+  modulus_bit_length: 2048
+  problem: rsa_integer_factoring
+
+qec:
+  distance_policy: heuristic_union_bound
+  logical_error_budget: 0.1
+
+table2_reference_row:
+  value: "ours_2019_parallel_28_ccz"
+  unit: "descriptor"
+
+paths:
+  modality: Assumptions/Modalities/superconducting_gidney_ekera_2021.yaml
+  qec_code: Assumptions/QEC_Codes/surface_gidney_ekera_2021.yaml
+  magic: Assumptions/MagicStateProduction/ccz_factory_gidney_ekera_2021.yaml
+  magic_aux: Assumptions/MagicStateProduction/t_factory_fallback_gidney_ekera_2021.yaml
+  algorithm: Algorithms/shor_rsa_gidney_ekera_2021.yaml
+  qcvv: Assumptions/QCVV/identity_no_overhead.yaml
+  qem: Assumptions/QEM/identity_no_overhead.yaml

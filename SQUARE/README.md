@@ -62,7 +62,7 @@ Reports include:
 
 After install, load a scenario and print a report:
 
-The scenario YAML path must resolve **under** the SQuaRE project root (the directory containing `Assumptions/Schemas.yaml`). Use `--root <path>` when your cwd or scenario path would otherwise leave the file outside that tree (same containment as `paths.*` references).
+The scenario YAML path must resolve **under** the SQuaRE project root (the directory containing `Assumptions/Schemas.yaml`). Use `--root <path>` when your cwd or scenario path would otherwise leave the file outside that tree (same containment as `paths.*` references). Exit codes: `0` success; `1` load/build/Markdown/JSON errors (stderr prefixed `square-report:`); `2` invalid flags (e.g. `--d` / `--n` less than 1).
 
 ```bash
 square-report Configs/rsa2048_gidney_ekera_2021_parallel.yaml

@@ -1,0 +1,24 @@
+# Same stack as ``oratomic_gold_path.yaml`` with identity QCVV + QEM paths wired.
+schema_version: 1
+scenario: oratomic_gold_path_qcvv_qem
+description: >-
+  Oratomic gold path (Cain neutral atom + QLDPC + ECDLP envelope) with ``paths.qcvv`` and ``paths.qem``
+  set to identity placeholders. Baseline ``oratomic_gold_path.yaml`` omits these paths for a minimal layer list.
+
+target:
+  problem: ecdlp_secp256k1_256_bit
+  curve_bit_length: 256
+  ecdlp_variant: low_toffoli_variant
+
+qec:
+  distance_policy: heuristic_union_bound
+  logical_error_budget: 0.1
+
+paths:
+  modality: Assumptions/Modalities/neutral_atom_cain_et_al_2026.yaml
+  qec_code: Assumptions/QEC_Codes/qldpc_cain_et_al_2026.yaml
+  magic: Assumptions/MagicStateProduction/ccz_factory_gidney_ekera_2021.yaml
+  magic_aux: Assumptions/MagicStateProduction/t_factory_fallback_gidney_ekera_2021.yaml
+  algorithm: Algorithms/ecdlp_secp256k1_babbush_et_al_2026.yaml
+  qcvv: Assumptions/QCVV/identity_no_overhead.yaml
+  qem: Assumptions/QEM/identity_no_overhead.yaml

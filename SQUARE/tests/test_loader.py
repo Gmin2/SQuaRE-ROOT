@@ -83,6 +83,21 @@ def test_load_scenario_bundle_require_scenario_under_root_raises(tmp_path: Path)
         load_scenario_bundle(outside, root=root, require_scenario_under_root=True)
 
 
+def test_load_repo_flagship_qcvv_qem_companion_scenarios() -> None:
+    """Step-2 wiring: RSA, ECDLP, and Oratomic companions load identity QCVV/QEM documents."""
+    root = find_square_root()
+    for rel in (
+        "Configs/rsa2048_gidney_ekera_2021_parallel_qcvv_qem.yaml",
+        "Configs/ecdlp_secp256k1_babbush_2026_low_toffoli_qcvv_qem.yaml",
+        "Configs/oratomic_gold_path_qcvv_qem.yaml",
+    ):
+        bundle = load_scenario_bundle(root / rel, root=root)
+        assert bundle.qcvv is not None
+        assert bundle.qcvv["document_id"] == "qcvv_identity_no_overhead"
+        assert bundle.qem is not None
+        assert bundle.qem["document_id"] == "qem_identity_no_overhead"
+
+
 def test_load_optional_qcvv_and_qem_paths(tmp_path: Path) -> None:
     root = find_square_root()
     scen = tmp_path / "_test_qcvv_qem_bundle.yaml"

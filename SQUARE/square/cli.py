@@ -83,7 +83,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.markdown:
-        sys.stdout.write(report_to_markdown(report))
+        try:
+            sys.stdout.write(report_to_markdown(report))
+        except (AttributeError, KeyError, OSError, TypeError, ValueError) as exc:
+            print(f"square-report: cannot render Markdown: {exc}", file=sys.stderr)
+            return 1
     else:
         try:
             json.dump(report, sys.stdout, indent=2, allow_nan=False)

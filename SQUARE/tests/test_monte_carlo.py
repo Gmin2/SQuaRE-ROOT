@@ -325,3 +325,55 @@ def test_cli_mc_bad_schema_version_returns_1(monkeypatch: pytest.MonkeyPatch) ->
         assert code == 1
     finally:
         study.unlink(missing_ok=True)
+
+
+def test_cli_mc_bundle_load_failure_returns_1(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Valid study + scenario file, but scenario ``paths.*`` points at a missing file → exit 1."""
+    from square import cli_mc
+
+    root = find_square_root()
+    uid = uuid.uuid4().hex
+    scen_name = f"_pytest_mc_bad_scenario_paths_{uid}.yaml"
+    study_name = f"_pytest_mc_study_bad_bundle_{uid}.yaml"
+    scen = root / "Configs" / scen_name
+    study = root / "Configs" / study_name
+    scen.write_text(
+        "schema_version: 1\nscenario: _pytest_mc_bad_paths\npaths:\n"
+        "  modality: Assumptions/Modalities/superconducting_gidney_ekera_2021.yaml\n"
+        "  qec_code: Assumptions/QEC_Codes/surface_gidney_ekera_2021.yaml\n"
+        "  magic: Assumptions/MagicStateProduction/ccz_factory_gidney_ekera_2021.yaml\n"
+        "  algorithm: Algorithms/does_not_exist_mc_cli_bundle.yaml\n",
+        encoding="utf-8",
+    )
+    study.write_text(
+        "\n".join(
+            [
+                "schema_version: 1",
+                "study_id: mc_bad_bundle_cli",
+                "description: test",
+                "scope: prior_predictive_only",
+                f"base_scenario: Configs/{scen_name}",
+                "parameters:",
+                "  - parameter_key: characteristic_physical_gate_error_rate",
+                "    distribution: uniform",
+                "    low: 0.0005",
+                "    high: 0.002",
+                "  - parameter_key: surface_code_cycle_time",
+                "    distribution: log_uniform",
+                "    low: 0.5",
+                "    high: 2.0",
+                "  - parameter_key: heuristic_surface_code_physical_threshold_order_of_magnitude",
+                "    distribution: uniform",
+                "    low: 0.005",
+                "    high: 0.02",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    try:
+        monkeypatch.chdir(root)
+        code = cli_mc.main([f"Configs/{study_name}", "--samples", "2", "--root", str(root)])
+        assert code == 1
+    finally:
+        study.unlink(missing_ok=True)
+        scen.unlink(missing_ok=True)

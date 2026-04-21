@@ -1,0 +1,24 @@
+# Same stack as ``ecdlp_secp256k1_babbush_2026_low_toffoli.yaml`` with identity QCVV + QEM profiles wired.
+schema_version: 1
+scenario: ecdlp_secp256k1_babbush_2026_low_toffoli_qcvv_qem
+description: >-
+  ECDLP low-Toffoli envelope (Babbush et al. 2026) with ``paths.qcvv`` / ``paths.qem`` identity
+  placeholders. Use the baseline file for comparisons where QCVV/QEM layers should be absent.
+
+target:
+  problem: ecdlp_secp256k1_256_bit
+  curve_bit_length: 256
+  ecdlp_variant: low_toffoli_variant
+
+qec:
+  distance_policy: heuristic_union_bound
+  logical_error_budget: 0.1
+
+paths:
+  modality: Assumptions/Modalities/superconducting_babbush_et_al_2026.yaml
+  qec_code: Assumptions/QEC_Codes/surface_gidney_ekera_2021.yaml
+  magic: Assumptions/MagicStateProduction/ccz_factory_gidney_ekera_2021.yaml
+  magic_aux: Assumptions/MagicStateProduction/t_factory_fallback_gidney_ekera_2021.yaml
+  algorithm: Algorithms/ecdlp_secp256k1_babbush_et_al_2026.yaml
+  qcvv: Assumptions/QCVV/identity_no_overhead.yaml
+  qem: Assumptions/QEM/identity_no_overhead.yaml

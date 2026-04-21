@@ -40,6 +40,14 @@ square-mc Configs/monte_carlo_study_ecdlp_example.yaml --samples 50 --sampling l
 
 Writes ``mc_samples_<study_id>.csv`` and ``mc_summary_<study_id>.json`` in the cwd unless ``--output-csv`` / ``--summary-json`` are set.
 
+### Exit codes (`square-mc`)
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success. |
+| `1` | Operational failure (missing files, path containment, invalid study YAML, bundle load / MC run / export errors). Messages are prefixed with `square-mc:` on stderr. |
+| `2` | Invalid CLI usage (e.g. ``--samples`` or ``--jobs`` less than 1). |
+
 ## Demo script
 
 ```bash
