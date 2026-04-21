@@ -62,6 +62,8 @@ Reports include:
 
 After install, load a scenario and print a report:
 
+The scenario YAML path must resolve **under** the SQuaRE project root (the directory containing `Assumptions/Schemas.yaml`). Use `--root <path>` when your cwd or scenario path would otherwise leave the file outside that tree (same containment as `paths.*` references).
+
 ```bash
 square-report Configs/rsa2048_gidney_ekera_2021_parallel.yaml
 square-report Configs/oratomic_gold_path.yaml

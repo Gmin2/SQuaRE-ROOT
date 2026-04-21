@@ -61,9 +61,9 @@ def test_load_rsa2048_gidney_ekera_2021_parallel() -> None:
     assert t1["minimum_spacetime_volume_megaqubit_days"] == 5.9
 
 
-def test_load_scenario_missing_path_raises() -> None:
+def test_load_scenario_missing_path_raises(tmp_path: Path) -> None:
     root = find_square_root()
-    bad = Path(root / "Configs" / "_nonexistent_scenario.yaml")
+    bad = tmp_path / "_nonexistent_scenario.yaml"
     bad.write_text(
         "schema_version: 1\nscenario: x\npaths:\n  modality: Assumptions/Modalities/superconducting_gidney_ekera_2021.yaml\n"
         "  qec_code: Assumptions/QEC_Codes/surface_gidney_ekera_2021.yaml\n"
@@ -71,11 +71,16 @@ def test_load_scenario_missing_path_raises() -> None:
         "  algorithm: Algorithms/does_not_exist.yaml\n",
         encoding="utf-8",
     )
-    try:
-        with pytest.raises(FileNotFoundError):
-            load_scenario_bundle(bad, root=root)
-    finally:
-        bad.unlink(missing_ok=True)
+    with pytest.raises(FileNotFoundError):
+        load_scenario_bundle(bad, root=root)
+
+
+def test_load_scenario_bundle_require_scenario_under_root_raises(tmp_path: Path) -> None:
+    root = find_square_root()
+    outside = tmp_path / "outside_repo.yaml"
+    outside.write_text("schema_version: 1\nscenario: x\npaths: {}\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="must lie under SQuaRE root"):
+        load_scenario_bundle(outside, root=root, require_scenario_under_root=True)
 
 
 def test_load_optional_qcvv_and_qem_paths(tmp_path: Path) -> None:

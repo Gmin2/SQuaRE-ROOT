@@ -89,6 +89,7 @@ def load_scenario_bundle(
     scenario_path: str | Path,
     *,
     root: Path | None = None,
+    require_scenario_under_root: bool = False,
 ) -> ScenarioBundle:
     """
     Parse ``scenario_path``, load each file listed under ``paths``, return a :class:`ScenarioBundle`.
@@ -99,9 +100,20 @@ def load_scenario_bundle(
 
     :param scenario_path: YAML file under ``Configs/`` (or any path).
     :param root: SQuaRE root; if omitted, inferred via :func:`find_square_root` from ``scenario_path``.
+    :param require_scenario_under_root: If True, ``scenario_path`` must resolve under ``root`` (or the
+        inferred root). References under ``paths.*`` are always resolved under that root; this option
+        additionally constrains where the scenario YAML itself may live.
     """
     scenario_file = Path(scenario_path).resolve()
     base = root if root is not None else find_square_root(scenario_file)
+    if require_scenario_under_root:
+        base_resolved = base.resolve()
+        try:
+            scenario_file.relative_to(base_resolved)
+        except ValueError as exc:
+            raise ValueError(
+                f"Scenario file must lie under SQuaRE root ({base_resolved}): {scenario_file}"
+            ) from exc
     scenario = _load_yaml(scenario_file)
 
     paths = scenario.get("paths")

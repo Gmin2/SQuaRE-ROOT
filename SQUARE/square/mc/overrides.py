@@ -28,8 +28,10 @@ def apply_numeric_overrides(
     if not overrides:
         return bundle
 
-    modality = copy.deepcopy(dict(bundle.modality))
-    qec = copy.deepcopy(dict(bundle.qec))
+    # Shallow document roots; deepcopy only overridden parameter_entry nodes so Monte Carlo
+    # draws avoid cloning entire modality/QEC trees each sample.
+    modality: dict[str, Any] = dict(bundle.modality)
+    qec: dict[str, Any] = dict(bundle.qec)
 
     for key, val in overrides.items():
         layer = PARAMETER_LAYERS.get(key)

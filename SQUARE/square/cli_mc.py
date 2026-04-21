@@ -75,22 +75,34 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
+    if args.samples < 1:
+        print("square-mc: --samples must be a positive integer (>= 1).", file=sys.stderr)
+        return 2
+
+    if args.jobs < 1:
+        print("square-mc: --jobs must be a positive integer (>= 1).", file=sys.stderr)
+        return 2
+
     root = args.root.resolve() if args.root is not None else find_square_root(Path(__file__))
 
-    spec = load_monte_carlo_study_spec(args.study, root=root)
+    try:
+        spec = load_monte_carlo_study_spec(args.study, root=root)
+    except (FileNotFoundError, TypeError, ValueError) as exc:
+        print(f"square-mc: {exc}", file=sys.stderr)
+        return 1
     try:
         scenario_path = resolve_path_under_square_root(root, spec.base_scenario)
     except ValueError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        print(f"square-mc: {exc}", file=sys.stderr)
         return 1
     if not scenario_path.is_file():
         print(
-            f"error: base scenario not found under project root: {spec.base_scenario} -> {scenario_path}",
+            f"square-mc: base scenario not found under project root: {spec.base_scenario} -> {scenario_path}",
             file=sys.stderr,
         )
         return 1
 
-    bundle = load_scenario_bundle(scenario_path, root=root)
+    bundle = load_scenario_bundle(scenario_path, root=root, require_scenario_under_root=True)
 
     result = run_monte_carlo_study(
         spec,
@@ -98,7 +110,7 @@ def main(argv: list[str] | None = None) -> int:
         n_samples=args.samples,
         seed=args.seed,
         include_full_report=False,
-        n_jobs=max(1, args.jobs),
+        n_jobs=args.jobs,
         sampling_strategy=args.sampling,
     )
 
@@ -113,7 +125,7 @@ def main(argv: list[str] | None = None) -> int:
         write_mc_samples_csv(out_csv, result.rows)
         write_mc_summary_json(out_json, result.summary)
     except ValueError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        print(f"square-mc: {exc}", file=sys.stderr)
         return 1
 
     print(f"Wrote {len(result.rows)} rows -> {out_csv.resolve()}")

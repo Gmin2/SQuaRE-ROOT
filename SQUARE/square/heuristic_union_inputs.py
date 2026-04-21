@@ -2,11 +2,26 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
 from square.yaml_numeric import read_parameter_entry_float_default
+
+
+def _heuristic_distance_bound_int(
+    raw_f: float,
+    *,
+    param_name: str,
+    warnings: list[str],
+) -> int:
+    """Coerce QEC heuristic distance bound to ``int`` (truncate toward zero); warn if non-integral."""
+    if math.isfinite(raw_f) and abs(raw_f - round(raw_f)) > 1e-9:
+        warnings.append(
+            f"paths.qec: {param_name} value {raw_f!r} is not an integer; using int() truncation toward zero."
+        )
+    return int(raw_f)
 
 
 @dataclass(frozen=True)
@@ -58,24 +73,36 @@ def read_heuristic_union_bound_inputs(
         context="paths.qec",
         param_name="heuristic_logical_error_prefactor",
     )
-    min_d = int(
-        read_parameter_entry_float_default(
-            qec.get("heuristic_distance_min_d"),
-            5.0,
-            warnings,
-            context="paths.qec",
-            param_name="heuristic_distance_min_d",
-        )
+    min_d_f = read_parameter_entry_float_default(
+        qec.get("heuristic_distance_min_d"),
+        5.0,
+        warnings,
+        context="paths.qec",
+        param_name="heuristic_distance_min_d",
     )
-    max_d = int(
-        read_parameter_entry_float_default(
-            qec.get("heuristic_distance_max_d"),
-            55.0,
-            warnings,
-            context="paths.qec",
-            param_name="heuristic_distance_max_d",
-        )
+    max_d_f = read_parameter_entry_float_default(
+        qec.get("heuristic_distance_max_d"),
+        55.0,
+        warnings,
+        context="paths.qec",
+        param_name="heuristic_distance_max_d",
     )
+    min_d = _heuristic_distance_bound_int(
+        float(min_d_f),
+        param_name="heuristic_distance_min_d",
+        warnings=warnings,
+    )
+    max_d = _heuristic_distance_bound_int(
+        float(max_d_f),
+        param_name="heuristic_distance_max_d",
+        warnings=warnings,
+    )
+    if max_d < min_d:
+        warnings.append(
+            f"paths.qec: heuristic_distance_max_d ({max_d}) < heuristic_distance_min_d ({min_d}) after coercion; "
+            "clamping max_d to min_d for heuristic scans."
+        )
+        max_d = min_d
 
     dist_opt_raw = qec_block.get("distance_optimizer", "discrete_scan")
     dist_opt = str(dist_opt_raw).strip().lower() if dist_opt_raw is not None else "discrete_scan"

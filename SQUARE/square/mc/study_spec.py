@@ -1,4 +1,8 @@
-"""Load Monte Carlo study YAML (priors over theta)."""
+"""Load Monte Carlo study YAML (priors over theta).
+
+Study files are parsed with ``yaml.safe_load`` and are treated as **trusted configuration**
+(same trust model as scenario YAML). Do not point ``square-mc`` at untrusted paths.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +12,7 @@ from typing import Any
 
 import yaml
 
-from square.loader import find_square_root
+from square.loader import find_square_root, resolve_path_under_square_root
 from square.mc.overrides import PARAMETER_LAYERS
 from square.mc.parameters import validate_distribution_spec
 
@@ -29,12 +33,13 @@ def load_monte_carlo_study_spec(
     *,
     root: Path | None = None,
 ) -> MonteCarloStudySpec:
-    base = root if root is not None else find_square_root(Path(__file__))
-    p = Path(path)
-    if p.is_file():
-        resolved = p.resolve()
-    else:
-        resolved = (base / path).resolve()
+    base = (root if root is not None else find_square_root(Path(__file__))).resolve()
+    try:
+        resolved = resolve_path_under_square_root(base, str(path))
+    except ValueError as exc:
+        raise ValueError(
+            f"Monte Carlo study path must resolve under SQuaRE root {base}: {path!r}"
+        ) from exc
     if not resolved.is_file():
         raise FileNotFoundError(f"Monte Carlo study file not found: {path} (tried {resolved})")
 
@@ -43,7 +48,11 @@ def load_monte_carlo_study_spec(
     if not isinstance(raw, dict):
         raise TypeError("Study YAML root must be a mapping.")
 
-    schema_version = int(raw.get("schema_version", 1))
+    raw_sv = raw.get("schema_version", 1)
+    try:
+        schema_version = int(raw_sv)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Study YAML schema_version must be an integer: {raw_sv!r}") from exc
     study_id = str(raw.get("study_id", resolved.stem))
     description = str(raw.get("description", ""))
     scope = str(raw.get("scope", "prior_predictive_only"))

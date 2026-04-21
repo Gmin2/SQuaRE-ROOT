@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from square.formula_eval import eval_numeric_formula, eval_numeric_formula_with_bindings
 from square.loader import find_square_root, load_scenario_bundle
+from square.mc.forward_model import extract_default_mc_metrics
 from square.report import build_scenario_report, report_to_markdown
 
 
@@ -361,3 +362,14 @@ def test_load_scenario_rejects_path_outside_root(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="escapes"):
         load_scenario_bundle(scenario, root=root)
+
+
+def test_build_scenario_report_mc_metrics_slice_matches_full_for_mc_extract() -> None:
+    root = find_square_root()
+    bundle = load_scenario_bundle(
+        root / "Configs" / "ecdlp_secp256k1_babbush_2026_low_toffoli.yaml",
+        root=root,
+    )
+    full = build_scenario_report(bundle)
+    slim = build_scenario_report(bundle, outputs="mc_metrics")
+    assert extract_default_mc_metrics(full) == extract_default_mc_metrics(slim)

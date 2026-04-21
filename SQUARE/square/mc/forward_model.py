@@ -60,9 +60,23 @@ def evaluate_forward_model(
     include_full_report: bool = True,
     code_distance_override: int | None = None,
 ) -> ForwardModelResult:
+    """
+    Evaluate ``bundle`` with optional numeric overrides and return default MC metrics.
+
+    When ``include_full_report`` is False, only the subgraph needed for
+    :func:`extract_default_mc_metrics` is built (see ``outputs="mc_metrics"`` on
+    :func:`square.report.build_scenario_report`); the returned ``report`` is ``None``.
+    """
     ov = dict(numeric_overrides) if numeric_overrides else {}
     b = apply_numeric_overrides(bundle, ov) if ov else bundle
-    report = build_scenario_report(b, code_distance_override=code_distance_override)
+    if include_full_report:
+        report = build_scenario_report(b, code_distance_override=code_distance_override)
+    else:
+        report = build_scenario_report(
+            b,
+            code_distance_override=code_distance_override,
+            outputs="mc_metrics",
+        )
     metrics = extract_default_mc_metrics(report)
     return ForwardModelResult(
         numeric_overrides=ov,

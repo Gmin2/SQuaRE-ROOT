@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Literal
 
 from square.heuristic_union_inputs import read_heuristic_union_bound_inputs
 from square.layout_optimization import (
@@ -30,9 +30,7 @@ from square.report_formula_pins import (
     table1_pin_row,
 )
 from square.report_layers import build_report_sources_and_layers
-from square.report_markdown import (
-    report_to_markdown,  # noqa: F401 — re-exported for square.report API
-)
+from square.report_markdown import report_to_markdown
 from square.report_physical_layout import build_physical_rollup_and_layout_estimate
 from square.report_qec_patch import evaluate_patch_physical_per_logical
 from square.report_system_metrics import build_system_metrics_block
@@ -611,6 +609,7 @@ def build_scenario_report(
     *,
     modulus_bits_override: int | None = None,
     code_distance_override: int | None = None,
+    outputs: Literal["full", "mc_metrics"] = "full",
 ) -> dict[str, Any]:
     """
     Assemble a JSON-serializable report dict for the given bundle.
@@ -618,6 +617,8 @@ def build_scenario_report(
     :param bundle: Loaded scenario documents.
     :param modulus_bits_override: If set, use this ``n`` instead of ``target.modulus_bit_length``.
     :param code_distance_override: If set, use this QEC distance ``d`` instead of scenario fields.
+    :param outputs: ``full`` (default) contract report; ``mc_metrics`` returns only keys required by
+        :func:`square.mc.forward_model.extract_default_mc_metrics` (cheaper for Monte Carlo draws).
     """
     warnings: list[str] = []
     scenario = bundle.scenario
@@ -687,13 +688,19 @@ def build_scenario_report(
                 try:
                     toffoli_b = float(raw_tb)
                 except (TypeError, ValueError):
-                    pass
+                    warnings.append(
+                        f"paper_table1_pins: toffoli_plus_t_halves_billions for n={n} is not numeric; "
+                        "dashboard toffoli_plus_t_halves_billions_at_n omitted."
+                    )
             raw_mq = t1.get("minimum_spacetime_volume_megaqubit_days")
             if raw_mq is not None:
                 try:
                     megaqd = float(raw_mq)
                 except (TypeError, ValueError):
-                    pass
+                    warnings.append(
+                        f"paper_table1_pins: minimum_spacetime_volume_megaqubit_days for n={n} is not numeric; "
+                        "dashboard minimum_spacetime_volume_megaqubitdays_at_n omitted."
+                    )
 
     t_fallback_recommended = False
     t_transition: int | None = None
@@ -728,19 +735,22 @@ def build_scenario_report(
     layout_estimate = phys.layout_estimate
     physical_rollup = phys.physical_rollup
 
-    layout_optimization = _build_layout_optimization_block(
-        scenario=scenario,
-        modality=bundle.modality,
-        qec=bundle.qec,
-        evaluated=evaluated,
-        patch_formula=patch_formula,
-        logical_qubits=logical_qubits_val,
-        selected_d=d_resolved,
-        reported_total_physical_qubits=reported_total_physical_qubits,
-        factory_footprint_physical_qubits=factory_footprint_from_yaml,
-        warnings=warnings,
-        physical_gate_error_rate_effective=p_effective_for_heuristic,
-    )
+    if outputs == "full":
+        layout_optimization = _build_layout_optimization_block(
+            scenario=scenario,
+            modality=bundle.modality,
+            qec=bundle.qec,
+            evaluated=evaluated,
+            patch_formula=patch_formula,
+            logical_qubits=logical_qubits_val,
+            selected_d=d_resolved,
+            reported_total_physical_qubits=reported_total_physical_qubits,
+            factory_footprint_physical_qubits=factory_footprint_from_yaml,
+            warnings=warnings,
+            physical_gate_error_rate_effective=p_effective_for_heuristic,
+        )
+    else:
+        layout_optimization = None
 
     timing_out = build_timing_section(
         evaluated=evaluated,
@@ -764,6 +774,37 @@ def build_scenario_report(
         pinned=pinned,
         ecdlp_block=ecdlp_block_for_metrics,
     )
+
+    dashboard = build_dashboard_fields(
+        ccz_count=ccz_count,
+        factory_param_key=factory_param_key,
+        table2_pinned_source_parameter=TABLE2_RSA2048_ROWS_KEY if ccz_count is not None else None,
+        table2_row_layout_descriptor=table2_row_layout_descriptor,
+        phys_key=phys_key,
+        rsa2048_phys=rsa2048_phys,
+        mega_key=mega_key,
+        rsa2048_megaqd=rsa2048_megaqd,
+        wall_key=wall_key,
+        rsa2048_wall_days=rsa2048_wall_days,
+        naive_serial_timing=naive_serial_timing,
+        evaluated=evaluated,
+        toffoli_b=toffoli_b,
+        megaqd=megaqd,
+        patch_physical_per_logical=patch_physical_per_logical,
+        approx_data_physical=approx_data_physical,
+        t_fallback_recommended=t_fallback_recommended,
+        t_transition=t_transition,
+        d_resolved=d_resolved,
+        qec_distance_resolution_mode=qec_distance_resolution.get("mode"),
+        derived_non_data_overhead_physical_qubits=derived_non_data_overhead_physical_qubits,
+        factory_footprint_from_yaml=factory_footprint_from_yaml,
+        schedule_model_v1=schedule_model_v1,
+        schedule_calibration=schedule_calibration,
+        ecdlp_block_for_metrics=ecdlp_block_for_metrics,
+    )
+
+    if outputs == "mc_metrics":
+        return {"dashboard": dashboard, "algorithm_metrics": algo_metrics}
 
     lfm = _build_logical_fault_model_block(
         distance_d=d_resolved,
@@ -800,34 +841,6 @@ def build_scenario_report(
 
     sl = build_report_sources_and_layers(bundle, algo)
 
-    dashboard = build_dashboard_fields(
-        ccz_count=ccz_count,
-        factory_param_key=factory_param_key,
-        table2_pinned_source_parameter=TABLE2_RSA2048_ROWS_KEY if ccz_count is not None else None,
-        table2_row_layout_descriptor=table2_row_layout_descriptor,
-        phys_key=phys_key,
-        rsa2048_phys=rsa2048_phys,
-        mega_key=mega_key,
-        rsa2048_megaqd=rsa2048_megaqd,
-        wall_key=wall_key,
-        rsa2048_wall_days=rsa2048_wall_days,
-        naive_serial_timing=naive_serial_timing,
-        evaluated=evaluated,
-        toffoli_b=toffoli_b,
-        megaqd=megaqd,
-        patch_physical_per_logical=patch_physical_per_logical,
-        approx_data_physical=approx_data_physical,
-        t_fallback_recommended=t_fallback_recommended,
-        t_transition=t_transition,
-        d_resolved=d_resolved,
-        qec_distance_resolution_mode=qec_distance_resolution.get("mode"),
-        derived_non_data_overhead_physical_qubits=derived_non_data_overhead_physical_qubits,
-        factory_footprint_from_yaml=factory_footprint_from_yaml,
-        schedule_model_v1=schedule_model_v1,
-        schedule_calibration=schedule_calibration,
-        ecdlp_block_for_metrics=ecdlp_block_for_metrics,
-    )
-
     qec_overhead = {
         "logical_qubit_patch_physical_qubit_count": {
             "formula": patch_formula,
@@ -862,3 +875,6 @@ def build_scenario_report(
         timing=timing_block,
         dashboard=dashboard,
     )
+
+
+__all__ = ["build_scenario_report", "report_to_markdown"]

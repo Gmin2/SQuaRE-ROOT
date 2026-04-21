@@ -9,6 +9,17 @@ This document defines the **machine-readable report** produced after loading a s
 | `report_contract_version` | Integer. Bump when top-level keys or semantics change in a breaking way. |
 | `schema_version` (inside `scenario`) | Assumptions / scenario YAML version from `Assumptions/Schemas.yaml`. |
 
+## Internal: Monte Carlo metrics slice (`outputs="mc_metrics"`)
+
+Monte Carlo (`square-mc`) calls `build_scenario_report(..., outputs="mc_metrics")` when it only needs default forward-model metrics. That path returns a **non-contract** object containing exactly:
+
+| Key | Purpose |
+|-----|---------|
+| `dashboard` | Same shape as the full report’s `dashboard` (headline fields for MC extraction). |
+| `algorithm_metrics` | Same shape as the full report’s `algorithm_metrics` (including optional `ecdlp` when applicable). |
+
+It omits layout optimization, logical fault model, system metrics, parameter sensitivity, sources/layers assembly, and other full-report sections. Tooling must not treat this object as a full `report_contract_version` document. If `extract_default_mc_metrics` (or equivalent) gains new dependencies, update this slice and its tests together. Regression: `tests/test_report.py` → `test_build_scenario_report_mc_metrics_slice_matches_full_for_mc_extract`.
+
 ## Top-level envelope
 
 Every report is a JSON-serializable object with at least:

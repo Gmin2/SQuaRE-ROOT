@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import random
+import uuid
 from pathlib import Path
 
 import pytest
@@ -54,6 +55,33 @@ def test_load_study_spec_relative() -> None:
     assert spec.study_id == "mc_ecdlp_gate_and_cycle_priors"
     assert len(spec.parameters) == 3
     assert spec.sampling_strategy == "independent"
+
+
+def test_load_monte_carlo_study_spec_rejects_escape_relative_to_root() -> None:
+    root = find_square_root()
+    with pytest.raises(ValueError, match="under SQuaRE root"):
+        load_monte_carlo_study_spec("..", root=root)
+
+
+def test_evaluate_forward_model_mc_metrics_matches_full_extract() -> None:
+    """``include_full_report=False`` must not change extracted MC metrics vs full report."""
+    root = find_square_root()
+    bundle = load_scenario_bundle(
+        root / "Configs" / "ecdlp_secp256k1_babbush_2026_low_toffoli.yaml",
+        root=root,
+    )
+    theta = {
+        "characteristic_physical_gate_error_rate": 0.001,
+        "surface_code_cycle_time": 1.0,
+        "heuristic_surface_code_physical_threshold_order_of_magnitude": 0.01,
+    }
+    full_m = evaluate_forward_model(
+        bundle, numeric_overrides=theta, include_full_report=True
+    ).metrics
+    slim_m = evaluate_forward_model(
+        bundle, numeric_overrides=theta, include_full_report=False
+    ).metrics
+    assert full_m == slim_m
 
 
 def test_sample_parameter_reproducible() -> None:
@@ -178,6 +206,42 @@ def test_cli_mc_main_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert data["mc_summary_contract_version"] == MC_SUMMARY_CONTRACT_VERSION
 
 
+def test_cli_mc_rejects_non_positive_jobs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from square import cli_mc
+
+    root = find_square_root()
+    monkeypatch.chdir(tmp_path)
+    code = cli_mc.main(
+        [
+            str(root / "Configs" / "monte_carlo_study_ecdlp_example.yaml"),
+            "--samples",
+            "1",
+            "--jobs",
+            "0",
+            "--root",
+            str(root),
+        ]
+    )
+    assert code == 2
+
+
+def test_cli_mc_rejects_non_positive_samples(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from square import cli_mc
+
+    root = find_square_root()
+    monkeypatch.chdir(tmp_path)
+    code = cli_mc.main(
+        [
+            str(root / "Configs" / "monte_carlo_study_ecdlp_example.yaml"),
+            "--samples",
+            "-1",
+            "--root",
+            str(root),
+        ]
+    )
+    assert code == 2
+
+
 def test_cli_mc_rejects_base_scenario_path_outside_root(tmp_path: Path) -> None:
     """``base_scenario`` must resolve under ``--root`` (no absolute fallback outside the tree)."""
     from square import cli_mc
@@ -203,3 +267,61 @@ def test_cli_mc_rejects_base_scenario_path_outside_root(tmp_path: Path) -> None:
     )
     code = cli_mc.main([str(study), "--samples", "1", "--root", str(root)])
     assert code == 1
+
+
+def test_cli_mc_malformed_study_yaml_returns_1(monkeypatch: pytest.MonkeyPatch) -> None:
+    from square import cli_mc
+
+    root = find_square_root()
+    fname = f"_pytest_cli_mc_bad_parameters_{uuid.uuid4().hex}.yaml"
+    study = root / "Configs" / fname
+    study.write_text(
+        "\n".join(
+            [
+                "schema_version: 1",
+                "study_id: bad_params",
+                "description: test",
+                "scope: prior_predictive_only",
+                "base_scenario: Configs/ecdlp_secp256k1_babbush_2026_low_toffoli.yaml",
+                "parameters: not_a_list",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    try:
+        monkeypatch.chdir(root)
+        code = cli_mc.main([f"Configs/{fname}", "--samples", "1", "--root", str(root)])
+        assert code == 1
+    finally:
+        study.unlink(missing_ok=True)
+
+
+def test_cli_mc_bad_schema_version_returns_1(monkeypatch: pytest.MonkeyPatch) -> None:
+    from square import cli_mc
+
+    root = find_square_root()
+    fname = f"_pytest_cli_mc_bad_schema_version_{uuid.uuid4().hex}.yaml"
+    study = root / "Configs" / fname
+    study.write_text(
+        "\n".join(
+            [
+                "schema_version: not_an_int",
+                "study_id: bad_schema",
+                "description: test",
+                "scope: prior_predictive_only",
+                "base_scenario: Configs/ecdlp_secp256k1_babbush_2026_low_toffoli.yaml",
+                "parameters:",
+                "  - parameter_key: characteristic_physical_gate_error_rate",
+                "    distribution: uniform",
+                "    low: 0.0005",
+                "    high: 0.002",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    try:
+        monkeypatch.chdir(root)
+        code = cli_mc.main([f"Configs/{fname}", "--samples", "1", "--root", str(root)])
+        assert code == 1
+    finally:
+        study.unlink(missing_ok=True)
