@@ -6,7 +6,10 @@ import math
 from collections.abc import Mapping
 from typing import Any
 
-from square.yaml_numeric import read_parameter_entry_float
+from square.yaml_numeric import (
+    read_evaluated_abstract_measurement_depth_layers,
+    read_parameter_entry_float,
+)
 
 # Optional magic YAML: per-CCZ-factory supply of abstract measurement-depth equivalents per second.
 # When absent, ``magic_supply_adequate`` / ``magic_limited_runtime_multiplier`` stay ``null`` (not modeled).
@@ -15,6 +18,8 @@ MAGIC_SUPPLY_DEPTH_LAYERS_PER_S_PER_FACTORY_KEY = (
 )
 
 _MAX_RUNTIME_MULTIPLIER = 1_000_000.0
+
+_UNSET_DEPTH: object = object()
 
 
 def compute_magic_throughput_dashboard_fields(
@@ -25,9 +30,15 @@ def compute_magic_throughput_dashboard_fields(
     schedule_model_v1: Mapping[str, Any] | None,
     naive_serial_timing: Mapping[str, Any] | None,
     warnings: list[str],
+    depth_layers: float | None | object = _UNSET_DEPTH,
 ) -> dict[str, Any]:
     """
     Compare abstract logical-depth demand rate to an optional magic supply rate.
+
+    When ``depth_layers`` is provided (e.g. from :func:`square.report_dashboard.build_dashboard_fields`),
+    it must already satisfy the same finiteness / non-negativity rules as
+    :func:`square.yaml_numeric.read_evaluated_abstract_measurement_depth_layers`; ``None`` falls back to
+    reading ``evaluated`` (with warnings).
 
     **Demand (proxy):** ``D / T`` where ``D`` = ``evaluated.abstract_measurement_depth_layers.value`` and
     ``T`` is wall-clock seconds from ``timing.schedule_model_v1.wall_clock_days`` when present, else
@@ -43,17 +54,15 @@ def compute_magic_throughput_dashboard_fields(
     """
     out: dict[str, Any] = {"magic_supply_adequate": None, "magic_limited_runtime_multiplier": None}
 
-    depth_entry = evaluated.get("abstract_measurement_depth_layers")
-    depth_val: float | None = None
-    if isinstance(depth_entry, dict) and depth_entry.get("value") is not None:
-        try:
-            depth_val = float(depth_entry["value"])
-        except (TypeError, ValueError):
-            depth_val = None
-    if depth_val is None or depth_val < 0.0 or not math.isfinite(depth_val):
-        warnings.append(
-            "dashboard.magic_throughput: skipped; need finite evaluated.abstract_measurement_depth_layers.value."
+    if depth_layers is _UNSET_DEPTH:
+        depth_val = read_evaluated_abstract_measurement_depth_layers(
+            evaluated,
+            warnings,
+            context="dashboard.magic_throughput",
         )
+    else:
+        depth_val = depth_layers  # type: ignore[assignment]
+    if depth_val is None:
         return out
 
     wall_days: float | None = None
@@ -117,6 +126,9 @@ def compute_magic_throughput_dashboard_fields(
 
     supply_lps = float(n_ccz) * float(rate)
     if supply_lps <= 0.0:
+        warnings.append(
+            "dashboard.magic_throughput: skipped; non-positive supply proxy (N_ccz × per-factory rate)."
+        )
         return out
 
     eps = 1e-12

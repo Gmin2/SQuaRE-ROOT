@@ -1,0 +1,1112 @@
+﻿{
+  "report_contract_version": 15,
+  "engine": {
+    "name": "square",
+    "version": "0.0.1"
+  },
+  "generated_at": "2026-04-21T02:53:29Z",
+  "warnings": [
+    "code distance d from heuristic_union_bound (phenomenological model), not the paper-specific optimizer in Gidney & Eker\u00e5 2021.",
+    "approximate_data_plane_physical_qubits = abstract_logical_qubits \u00d7 physical_qubits_per_logical; excludes magic-state factories, routing, classical control footprint, and other non-data overhead.",
+    "derived_non_data_overhead_physical_qubits = Table-2-pinned total qubits minus naive data-plane product; attributes remainder to factories, routing, distillation, control, etc. without splitting them.",
+    "layout_optimization scans patch scaling vs d; it is not a full device placement optimizer.",
+    "naive_serial_time_days = abstract_measurement_depth_layers \u00d7 surface_code_cycle_time; assumes one code cycle per abstract layer, no parallelism, no reaction/distillation limits \u2014 not comparable to Table 2 wall-clock without the paper\u2019s full schedule.",
+    "schedule_model_v1 uses depth/(CCZ factories) with an effective layer time; it is a coarse bound, not the paper\u2019s compiled schedule.",
+    "logical_fault_model.logical_cycle_time_microseconds is max(available components); not a compiled schedule. Add qec_decode_latency_microseconds / qec_measurement_round_time_microseconds on QEC YAML when pinning OSRE \u03c4_cycle pieces.",
+    "logical_fault_model.logical_error_rate_per_cycle is a phenomenological proxy A\u00b7(p/p_th)^ceil((d+1)/2), not a paper-calibrated logical channel.",
+    "parameter_sensitivity: local finite differences are coarse proxies; use Monte Carlo for global uncertainty."
+  ],
+  "scenario": {
+    "schema_version": 1,
+    "scenario": "rsa2048_gidney_ekera_2021_parallel",
+    "description": "RSA-2048 factoring resource estimate baseline matching Table 2 row \u201c(ours) 2019 (parallel)\u201d: 28 CCZ factories, reaction-limited carry runways, 0.1% gate error, 1 \u00b5s cycle, 10 \u00b5s reaction.",
+    "target": {
+      "modulus_bit_length": 2048,
+      "problem": "rsa_integer_factoring"
+    },
+    "qec": {
+      "distance_policy": "heuristic_union_bound",
+      "logical_error_budget": 0.1
+    },
+    "table2_reference_row": {
+      "value": "ours_2019_parallel_28_ccz",
+      "unit": "descriptor"
+    },
+    "paths": {
+      "modality": "Assumptions/Modalities/superconducting_gidney_ekera_2021.yaml",
+      "qec_code": "Assumptions/QEC_Codes/surface_gidney_ekera_2021.yaml",
+      "magic": "Assumptions/MagicStateProduction/ccz_factory_gidney_ekera_2021.yaml",
+      "magic_aux": "Assumptions/MagicStateProduction/t_factory_fallback_gidney_ekera_2021.yaml",
+      "algorithm": "Algorithms/shor_rsa_gidney_ekera_2021.yaml"
+    }
+  },
+  "target": {
+    "modulus_bit_length": 2048,
+    "problem": "rsa_integer_factoring"
+  },
+  "table2_reference": {
+    "value": "ours_2019_parallel_28_ccz",
+    "unit": "descriptor"
+  },
+  "sources": {
+    "modality": {
+      "notes": "Targets large-scale superconducting with a planar grid and nearest-neighbor coupling, as stated in the abstract and Section 1. Values below are the headline physical assumptions used for Table 2 comparison rows labeled \u201c(ours) 2019\u201d.\n",
+      "date_issued": "2021-04-15",
+      "document_id": "superconducting_gidney_ekera_2021",
+      "primary_reference": "Gidney, C. & Eker\u00e5, M. How to factor 2048 bit RSA integers in 8 hours using 20 million noisy qubits. Quantum 5, 433 (2021).",
+      "arxiv": "1905.09749",
+      "doi": "10.22331/q-2021-04-15-433",
+      "schema_version": 1
+    },
+    "qec": {
+      "notes": "Logical qubits are stored as square patches; operations use lattice surgery. Distance d is chosen by their optimization procedure to meet the algorithm error budget (not fixed here).\n",
+      "date_issued": "2021-04-15",
+      "document_id": "surface_gidney_ekera_2021",
+      "primary_reference": "Gidney, C. & Eker\u00e5, M. How to factor 2048 bit RSA integers in 8 hours using 20 million noisy qubits. Quantum 5, 433 (2021).",
+      "arxiv": "1905.09749",
+      "doi": "10.22331/q-2021-04-15-433",
+      "schema_version": 1
+    },
+    "magic": {
+      "notes": "Table 2 lists three \u201cours\u201d configurations differing by CCZ factory count and whether carry is distillation- or reaction-limited. Use the matching modality + layout scenario; counts are for factoring 2048-bit RSA under the paper\u2019s full pipeline.\n",
+      "date_issued": "2021-04-15",
+      "document_id": "ccz_factory_gidney_ekera_2021",
+      "primary_reference": "Gidney, C. & Eker\u00e5, M. How to factor 2048 bit RSA integers in 8 hours using 20 million noisy qubits. Quantum 5, 433 (2021).",
+      "arxiv": "1905.09749",
+      "doi": "10.22331/q-2021-04-15-433",
+      "schema_version": 1
+    },
+    "algorithm": {
+      "notes": "Uses Eker\u00e5\u2013H\u00e5stad RSA factoring (short discrete log). Exponent-register size scales as ne \u2248 1.5 n versus 2n in vanilla Shor. Asymptotic abstract costs follow Table 1 row \u201c(ours) 2019\u201d. Physical resource totals require composed modality + QEC + magic scenario (Table 2).\n",
+      "date_issued": "2021-04-15",
+      "document_id": "shor_rsa_gidney_ekera_2021",
+      "primary_reference": "Gidney, C. & Eker\u00e5, M. How to factor 2048 bit RSA integers in 8 hours using 20 million noisy qubits. Quantum 5, 433 (2021).",
+      "arxiv": "1905.09749",
+      "doi": "10.22331/q-2021-04-15-433",
+      "schema_version": 1
+    },
+    "magic_aux": {
+      "notes": "Figure 1 (and its caption) states that past ~n \u2248 32786 the construction exceeds the CCZ factory error budget and the model switches to the T factory of Fowler et al. This file flags that branch; detailed T-factory YAML should cite the original factory reference when implementing throughput.\n",
+      "date_issued": "2021-04-15",
+      "document_id": "t_factory_fallback_gidney_ekera_2021",
+      "primary_reference": "Gidney, C. & Eker\u00e5, M. How to factor 2048 bit RSA integers in 8 hours using 20 million noisy qubits. Quantum 5, 433 (2021).",
+      "arxiv": "1905.09749",
+      "doi": "10.22331/q-2021-04-15-433",
+      "schema_version": 1
+    },
+    "qcvv": null,
+    "qem": null
+  },
+  "layers": {
+    "modality": {
+      "document_id": "superconducting_gidney_ekera_2021",
+      "header": {
+        "document_id": "superconducting_gidney_ekera_2021",
+        "schema_version": 1,
+        "primary_reference": "Gidney, C. & Eker\u00e5, M. How to factor 2048 bit RSA integers in 8 hours using 20 million noisy qubits. Quantum 5, 433 (2021).",
+        "doi": "10.22331/q-2021-04-15-433",
+        "arxiv": "1905.09749",
+        "date_issued": "2021-04-15",
+        "notes": "Targets large-scale superconducting with a planar grid and nearest-neighbor coupling, as stated in the abstract and Section 1. Values below are the headline physical assumptions used for Table 2 comparison rows labeled \u201c(ours) 2019\u201d.\n"
+      },
+      "parameters": {
+        "characteristic_physical_gate_error_rate": {
+          "value": 0.001,
+          "unit": "error_probability_per_gate",
+          "confidence": "estimated",
+          "source": "Gidney & Eker\u00e5, Quantum 2021 (Table 2, historical comparison)",
+          "date": "2021-04-15",
+          "section": "Table 2",
+          "notes": "Reported as 0.1% in the table; authors caution that halving/doubling this moves qubit counts by >10%."
+        },
+        "surface_code_cycle_time": {
+          "value": 1.0,
+          "unit": "microseconds",
+          "confidence": "estimated",
+          "source": "Gidney & Eker\u00e5, Quantum 2021 (Table 2)",
+          "date": "2021-04-15",
+          "section": "Table 2"
+        },
+        "classical_control_reaction_time": {
+          "value": 10.0,
+          "unit": "microseconds",
+          "confidence": "estimated",
+          "source": "Gidney & Eker\u00e5, Quantum 2021 (Table 2)",
+          "date": "2021-04-15",
+          "section": "Table 2",
+          "notes": "Drives reaction-limited layouts; compare to 0.1 \u00b5s in Fowler et al. 2012 row of same table."
+        },
+        "connectivity_model": {
+          "value": "planar_nearest_neighbor",
+          "unit": "descriptor",
+          "confidence": "estimated",
+          "source": "Gidney & Eker\u00e5, Quantum 2021 (abstract; Table 2)",
+          "date": "2021-04-15",
+          "section": "Abstract; Table 2",
+          "layer": "physical"
+        },
+        "platform_class": {
+          "value": "superconducting_large_scale_planar",
+          "unit": "descriptor",
+          "confidence": "estimated",
+          "source": "Gidney & Eker\u00e5, Quantum 2021 (abstract)",
+          "date": "2021-04-15",
+          "section": "Abstract",
+          "layer": "physical"
+        },
+        "coherence_time_t1_microseconds": {
+          "value": 80.0,
+          "unit": "microseconds",
+          "confidence": "speculative",
+          "source": "Order-of-magnitude superconducting coherence literature; not a Table 2 column in Gidney & Eker\u00e5 2021",
+          "date": "2026-04-15",
+          "section": "SQuaRE OSRE extension",
+          "notes": "Replace with device-calibrated T1 when tying to QCVV.",
+          "layer": "physical"
+        },
+        "coherence_time_t2_microseconds": {
+          "value": 60.0,
+          "unit": "microseconds",
+          "confidence": "speculative",
+          "source": "Order-of-magnitude proxy; Gidney & Eker\u00e5 2021 Table 2 does not list T2 separately",
+          "date": "2026-04-15",
+          "section": "SQuaRE OSRE extension",
+          "layer": "physical"
+        },
+        "single_qubit_gate_error_rate": {
+          "value": 0.0006,
+          "unit": "error_probability_per_gate",
+          "confidence": "speculative",
+          "source": "Illustrative ratio vs headline two-qubit error; refine from calibration stack",
+          "date": "2026-04-15",
+          "section": "SQuaRE OSRE extension",
+          "layer": "physical"
+        },
+        "two_qubit_gate_error_rate": {
+          "value": 0.001,
+          "unit": "error_probability_per_gate",
+          "confidence": "estimated",
+          "source": "Gidney & Eker\u00e5, Quantum 2021 (Table 2, 0.1% headline physical error)",
+          "date": "2021-04-15",
+          "section": "Table 2",
+          "notes": "Matches characteristic_physical_gate_error_rate for the Table 2 \u201c(ours) 2019\u201d row intent.",
+          "layer": "physical"
+        },
+        "measurement_error_rate": {
+          "value": 0.005,
+          "unit": "error_probability_per_shot",
+          "confidence": "speculative",
+          "source": "Typical order-of-magnitude readout error for resource models; not pinned in G&E Table 2",
+          "date": "2026-04-15",
+          "section": "SQuaRE OSRE extension",
+          "layer": "physical"
+        },
+        "idle_error_rate_per_cycle": {
+          "value": 0.0001,
+          "unit": "error_probability_per_idle_slot_proxy",
+          "confidence": "speculative",
+          "source": "Proxy idle error between active gates; refine from control model",
+          "date": "2026-04-15",
+          "section": "SQuaRE OSRE extension",
+          "layer": "physical"
+        },
+        "correlated_noise_parameter": {
+          "value": 1.0,
+          "unit": "dimensionless_multiplier",
+          "confidence": "speculative",
+          "source": "Baseline 1.0 = no explicit correlated-noise penalty in this Table 2 headline row",
+          "date": "2026-04-15",
+          "section": "SQuaRE OSRE extension",
+          "notes": "OSRE memo scaling penalties can replace this multiplier in future YAML.",
+          "layer": "physical"
+        },
+        "leakage_error_rate": {
+          "value": 1e-05,
+          "unit": "error_probability_per_gate_proxy",
+          "confidence": "speculative",
+          "source": "Small leakage proxy; not discussed numerically in Gidney & Eker\u00e5 2021 Table 2",
+          "date": "2026-04-15",
+          "section": "SQuaRE OSRE extension",
+          "layer": "physical"
+        },
+        "fabrication_variability_proxy": {
+          "value": 0.0,
+          "unit": "dimensionless_order_one",
+          "confidence": "speculative",
+          "source": "Placeholder 0 = no extra fabrication spread; OSRE memo variability slot",
+          "date": "2026-04-15",
+          "section": "SQuaRE OSRE extension",
+          "layer": "physical"
+        },
+        "thermal_load_index_proxy": {
+          "value": 0.0,
+          "unit": "dimensionless_order_one",
+          "confidence": "speculative",
+          "source": "Placeholder 0 = no thermal headroom penalty in this headline row",
+          "date": "2026-04-15",
+          "section": "SQuaRE OSRE extension",
+          "layer": "physical"
+        },
+        "control_plane_saturation_proxy": {
+          "value": 0.0,
+          "unit": "dimensionless_order_one",
+          "confidence": "speculative",
+          "source": "Placeholder 0 = no control-plane saturation term in this profile",
+          "date": "2026-04-15",
+          "section": "SQuaRE OSRE extension",
+          "layer": "physical"
+        }
+      }
+    },
+    "qec": {
+      "document_id": "surface_gidney_ekera_2021",
+      "header": {
+        "document_id": "surface_gidney_ekera_2021",
+        "schema_version": 1,
+        "primary_reference": "Gidney, C. & Eker\u00e5, M. How to factor 2048 bit RSA integers in 8 hours using 20 million noisy qubits. Quantum 5, 433 (2021).",
+        "doi": "10.22331/q-2021-04-15-433",
+        "arxiv": "1905.09749",
+        "date_issued": "2021-04-15",
+        "notes": "Logical qubits are stored as square patches; operations use lattice surgery. Distance d is chosen by their optimization procedure to meet the algorithm error budget (not fixed here).\n"
+      },
+      "parameters": {
+        "code_family": {
+          "value": "surface",
+          "unit": "descriptor",
+          "confidence": "estimated",
+          "source": "Gidney & Eker\u00e5, Quantum 2021 (Section 1.1; Figure 8 caption)",
+          "date": "2021-04-15",
+          "section": "Section 1.1",
+          "layer": "qec"
+        },
+        "logical_qubit_patch_physical_qubit_count_formula": {
+          "value": "2 * (d + 1)**2",
+          "unit": "physical_qubits_as_function_of_distance_d",
+          "confidence": "estimated",
+          "source": "Gidney & Eker\u00e5, Quantum 2021 (Figure 8; text in Section 1.1)",
+          "date": "2021-04-15",
+          "section": "Figure 8; Section 1.1",
+          "notes": "Square patch of side 2(d+1) in units of the lattice; total physical qubits 2(d+1)^2 per logical.",
+          "layer": "qec"
+        },
+        "logical_operations_implementation": {
+          "value": "lattice_surgery",
+          "unit": "descriptor",
+          "confidence": "estimated",
+          "source": "Gidney & Eker\u00e5, Quantum 2021 (Section 1.1)",
+          "date": "2021-04-15",
+          "section": "Section 1.1",
+          "layer": "qec"
+        },
+        "heuristic_surface_code_physical_threshold_order_of_magnitude": {
+          "value": 0.01,
+          "unit": "error_probability_per_gate",
+          "confidence": "speculative",
+          "source": "Order-of-magnitude surface-code threshold scale; replace with calibrated value for your stack.",
+          "date": "2025-03-20",
+          "section": "SQuaRE report heuristic",
+          "layer": "qec"
+        },
+        "heuristic_logical_error_prefactor": {
+          "value": 0.05,
+          "unit": "dimensionless",
+          "confidence": "speculative",
+          "source": "Leading coefficient in phenomenological logical error model used only for heuristic distance suggestions.",
+          "date": "2025-03-20",
+          "section": "SQuaRE report heuristic",
+          "layer": "qec"
+        },
+        "heuristic_distance_min_d": {
+          "value": 5,
+          "unit": "count",
+          "confidence": "speculative",
+          "source": "Clamp for heuristic distance suggestions in reports.",
+          "date": "2025-03-20",
+          "section": "SQuaRE report heuristic",
+          "layer": "qec"
+        },
+        "heuristic_distance_max_d": {
+          "value": 55,
+          "unit": "count",
+          "confidence": "speculative",
+          "source": "Clamp for heuristic distance suggestions in reports.",
+          "date": "2025-03-20",
+          "section": "SQuaRE report heuristic",
+          "layer": "qec"
+        },
+        "qec_decode_latency_microseconds": {
+          "value": 2.0,
+          "unit": "microseconds",
+          "confidence": "speculative",
+          "source": "SQuaRE placeholder decode latency; not pinned in Gidney & Eker\u00e5 2021 Table 2",
+          "date": "2026-04-15",
+          "section": "SQuaRE OSRE extension",
+          "layer": "qec"
+        },
+        "qec_measurement_round_time_microseconds": {
+          "value": 1.5,
+          "unit": "microseconds",
+          "confidence": "speculative",
+          "source": "SQuaRE placeholder measurement round time; refine from layout model",
+          "date": "2026-04-15",
+          "section": "SQuaRE OSRE extension",
+          "layer": "qec"
+        }
+      }
+    },
+    "magic": {
+      "document_id": "ccz_factory_gidney_ekera_2021",
+      "header": {
+        "document_id": "ccz_factory_gidney_ekera_2021",
+        "schema_version": 1,
+        "primary_reference": "Gidney, C. & Eker\u00e5, M. How to factor 2048 bit RSA integers in 8 hours using 20 million noisy qubits. Quantum 5, 433 (2021).",
+        "doi": "10.22331/q-2021-04-15-433",
+        "arxiv": "1905.09749",
+        "date_issued": "2021-04-15",
+        "notes": "Table 2 lists three \u201cours\u201d configurations differing by CCZ factory count and whether carry is distillation- or reaction-limited. Use the matching modality + layout scenario; counts are for factoring 2048-bit RSA under the paper\u2019s full pipeline.\n"
+      },
+      "parameters": {
+        "primary_non_clifford_mechanism": {
+          "value": "ccz_state_injection_and_lattice_surgery",
+          "unit": "descriptor",
+          "confidence": "estimated",
+          "source": "Gidney & Eker\u00e5, Quantum 2021 (Table 2; distillation strategy column)",
+          "date": "2021-04-15",
+          "section": "Table 2",
+          "layer": "magic"
+        },
+        "ccz_factory_supply_abstract_measurement_depth_layers_per_second_per_factory": {
+          "value": 120000,
+          "unit": "abstract_measurement_depth_layers_per_second_per_factory",
+          "confidence": "speculative",
+          "source": "Calibrated so Table-2 RSA-2048 parallel scenarios (28 CCZ, ~0.31 d wall) clear demand vs N_ccz\u00d7R under the same depth and schedule_model_v1 wall-clock proxies as the report; replace with extracted factory throughput when available.",
+          "date": "2026-04-20",
+          "section": "SQuaRE dashboard proxy",
+          "layer": "magic"
+        },
+        "paper_table2_rsa2048_reference_rows": {
+          "value": [
+            {
+              "ccz_factories": 1,
+              "physical_qubits_millions": 16,
+              "megaqubit_days": 90,
+              "wall_clock_days": 6,
+              "layout_descriptor": "distillation_limited_ripple_carry"
+            },
+            {
+              "ccz_factories": 14,
+              "physical_qubits_millions": 19,
+              "megaqubit_days": 6.6,
+              "wall_clock_days": 0.36,
+              "layout_descriptor": "reaction_limited_ripple_carry"
+            },
+            {
+              "ccz_factories": 28,
+              "physical_qubits_millions": 20,
+              "megaqubit_days": 5.9,
+              "wall_clock_days": 0.31,
+              "layout_descriptor": "reaction_limited_carry_runways"
+            }
+          ],
+          "unit": "paper_table2_rows",
+          "confidence": "estimated",
+          "source": "Gidney & Eker\u00e5, Quantum 2021 (Table 2)",
+          "date": "2021-04-15",
+          "section": "Table 2",
+          "notes": "Each row matches one \u201cours 2019\u201d configuration. layout_descriptor steers simple schedule inference (distillation-limited vs reaction-limited). Reports match rows by ccz_factories from scenario table2_reference_row.",
+          "layer": "magic"
+        },
+        "physical_qubits_per_ccz_factory_approximate": {
+          "value": 10000,
+          "unit": "physical_qubits",
+          "confidence": "speculative",
+          "source": "Order-of-magnitude placeholder for CCZ factory + local routing; replace with layout-extracted value when available.",
+          "date": "2025-03-20",
+          "section": "SQuaRE layout proxy",
+          "notes": "Report still prefers derived_non_data_overhead_physical_qubits (pinned total minus naive data plane) when paper_table2_rsa2048_reference_rows matches the scenario CCZ count.",
+          "layer": "magic"
+        }
+      }
+    },
+    "magic_aux": {
+      "header": {
+        "document_id": "t_factory_fallback_gidney_ekera_2021",
+        "schema_version": 1,
+        "primary_reference": "Gidney, C. & Eker\u00e5, M. How to factor 2048 bit RSA integers in 8 hours using 20 million noisy qubits. Quantum 5, 433 (2021).",
+        "doi": "10.22331/q-2021-04-15-433",
+        "arxiv": "1905.09749",
+        "date_issued": "2021-04-15",
+        "notes": "Figure 1 (and its caption) states that past ~n \u2248 32786 the construction exceeds the CCZ factory error budget and the model switches to the T factory of Fowler et al. This file flags that branch; detailed T-factory YAML should cite the original factory reference when implementing throughput.\n"
+      },
+      "parameters": {
+        "t_factory_used_beyond_ccz_error_budget": {
+          "value": true,
+          "unit": "boolean",
+          "confidence": "estimated",
+          "source": "Gidney & Eker\u00e5, Quantum 2021 (Figure 1 caption)",
+          "date": "2021-04-15",
+          "section": "Figure 1 caption",
+          "notes": "Discrete jump in resource estimates in Figure 1 attributed to switching from CCZ factory (Litinski 2019 / ref [36] in paper) to T factory (Fowler et al. 2012 / ref [27]).\n",
+          "layer": "magic"
+        },
+        "modulus_bit_length_ccz_to_t_transition_order_of_magnitude": {
+          "value": 32786,
+          "unit": "bits",
+          "confidence": "estimated",
+          "source": "Gidney & Eker\u00e5, Quantum 2021 (Figure 1 caption)",
+          "date": "2021-04-15",
+          "section": "Figure 1 caption",
+          "notes": "Stated as approximate location of the jump; not a sharp universal constant across all tunings.",
+          "layer": "magic"
+        },
+        "fallback_non_clifford_mechanism": {
+          "value": "t_distillation_fowler_et_al_style",
+          "unit": "descriptor",
+          "confidence": "estimated",
+          "source": "Gidney & Eker\u00e5, Quantum 2021 (Figure 1 caption; cites Fowler et al. 2012)",
+          "date": "2021-04-15",
+          "section": "Figure 1 caption",
+          "layer": "magic"
+        }
+      }
+    },
+    "qcvv": null,
+    "qem": null,
+    "algorithm": {
+      "document_id": "shor_rsa_gidney_ekera_2021",
+      "header": {
+        "document_id": "shor_rsa_gidney_ekera_2021",
+        "schema_version": 1,
+        "primary_reference": "Gidney, C. & Eker\u00e5, M. How to factor 2048 bit RSA integers in 8 hours using 20 million noisy qubits. Quantum 5, 433 (2021).",
+        "doi": "10.22331/q-2021-04-15-433",
+        "arxiv": "1905.09749",
+        "date_issued": "2021-04-15",
+        "notes": "Uses Eker\u00e5\u2013H\u00e5stad RSA factoring (short discrete log). Exponent-register size scales as ne \u2248 1.5 n versus 2n in vanilla Shor. Asymptotic abstract costs follow Table 1 row \u201c(ours) 2019\u201d. Physical resource totals require composed modality + QEC + magic scenario (Table 2).\n"
+      },
+      "parameters": {
+        "cryptographic_problem": {
+          "value": "rsa_integer_factoring",
+          "unit": "descriptor",
+          "confidence": "estimated",
+          "source": "Gidney & Eker\u00e5, Quantum 2021 (Section 2.1; Table 1)",
+          "date": "2021-04-15",
+          "section": "Section 2.1",
+          "layer": "algorithm"
+        },
+        "quantum_algorithm_family": {
+          "value": "shor_family_ekera_hastad_rsa",
+          "unit": "descriptor",
+          "confidence": "estimated",
+          "source": "Gidney & Eker\u00e5, Quantum 2021 (Section 2.1)",
+          "date": "2021-04-15",
+          "section": "Section 2.1",
+          "layer": "algorithm"
+        },
+        "exponent_register_qubits_ne_asymptotic": {
+          "value": "1.5 * n + O(1)",
+          "unit": "qubits_as_function_of_modulus_bits_n",
+          "confidence": "estimated",
+          "source": "Gidney & Eker\u00e5, Quantum 2021 (Section 2.1; ne = 3m, m = 0.5 n + O(1))",
+          "date": "2021-04-15",
+          "section": "Section 2.1",
+          "notes": "Vanilla Shor uses ne \u2248 2n; reduction drives fewer modular multiplications at given n.",
+          "layer": "algorithm"
+        },
+        "abstract_logical_qubits_formula": {
+          "value": "3 * n + 0.002 * n * log2(n)",
+          "unit": "logical_qubits_as_function_of_modulus_bits_n",
+          "confidence": "estimated",
+          "source": "Gidney & Eker\u00e5, Quantum 2021 (Table 1, row ours 2019)",
+          "date": "2021-04-15",
+          "section": "Table 1",
+          "layer": "algorithm"
+        },
+        "abstract_measurement_depth_formula": {
+          "value": "500 * n**2 + n**2 * log2(n)",
+          "unit": "layers_as_function_of_modulus_bits_n",
+          "confidence": "estimated",
+          "source": "Gidney & Eker\u00e5, Quantum 2021 (Table 1, row ours 2019)",
+          "date": "2021-04-15",
+          "section": "Table 1",
+          "layer": "algorithm"
+        },
+        "abstract_toffoli_plus_t_halves_count_formula": {
+          "value": "0.3 * n**3 + 0.0005 * n**3 * log2(n)",
+          "unit": "gates_as_function_of_modulus_bits_n",
+          "confidence": "estimated",
+          "source": "Gidney & Eker\u00e5, Quantum 2021 (Table 1, row ours 2019)",
+          "date": "2021-04-15",
+          "section": "Table 1",
+          "layer": "algorithm"
+        },
+        "paper_table1_pins_by_modulus_bit_length": {
+          "value": {
+            "1024": {
+              "toffoli_plus_t_halves_billions": 0.4,
+              "minimum_spacetime_volume_megaqubit_days": 0.5
+            },
+            "2048": {
+              "toffoli_plus_t_halves_billions": 2.7,
+              "minimum_spacetime_volume_megaqubit_days": 5.9
+            },
+            "3072": {
+              "toffoli_plus_t_halves_billions": 9.9,
+              "minimum_spacetime_volume_megaqubit_days": 21.0
+            }
+          },
+          "unit": "paper_table1_pins_by_modulus_bits",
+          "confidence": "estimated",
+          "source": "Gidney & Eker\u00e5, Quantum 2021 (Table 1, row ours 2019)",
+          "date": "2021-04-15",
+          "section": "Table 1",
+          "notes": "Billions of Toffoli+T/2 and minimum spacetime volume (megaqubit-days) as printed for listed n. Asymptotic formulas above remain the canonical model; these rows are for regression and dashboard pins.\n",
+          "layer": "algorithm"
+        }
+      }
+    }
+  },
+  "algorithm_metrics": {
+    "n": 2048,
+    "evaluated": {
+      "abstract_logical_qubits": {
+        "value": 6189.056,
+        "source_parameter": "abstract_logical_qubits_formula",
+        "provenance": "computed_from_yaml_formula"
+      },
+      "abstract_measurement_depth_layers": {
+        "value": 2143289344.0,
+        "source_parameter": "abstract_measurement_depth_formula",
+        "provenance": "computed_from_yaml_formula"
+      },
+      "abstract_toffoli_plus_t_halves_count": {
+        "value": 2624225017.856,
+        "source_parameter": "abstract_toffoli_plus_t_halves_count_formula",
+        "provenance": "computed_from_yaml_formula"
+      }
+    },
+    "evaluated_skipped": [
+      "exponent_register_qubits_ne_asymptotic"
+    ],
+    "pinned_in_algorithm_yaml": {
+      "toffoli_plus_t_halves_count_billions_n_2048": {
+        "confidence": "estimated",
+        "source": "Gidney & Eker\u00e5, Quantum 2021 (Table 1, row ours 2019)",
+        "date": "2021-04-15",
+        "section": "Table 1",
+        "layer": "algorithm",
+        "notes": "Resolved from paper_table1_pins_by_modulus_bit_length for n=2048.",
+        "value": 2.7,
+        "unit": "billions_of_toffoli_plus_t_halves"
+      },
+      "minimum_spacetime_volume_megaqubitdays_n_2048": {
+        "confidence": "estimated",
+        "source": "Gidney & Eker\u00e5, Quantum 2021 (Table 1, row ours 2019)",
+        "date": "2021-04-15",
+        "section": "Table 1",
+        "layer": "algorithm",
+        "notes": "Resolved from paper_table1_pins_by_modulus_bit_length for n=2048.",
+        "value": 5.9,
+        "unit": "megaqubit_days"
+      }
+    }
+  },
+  "qec_overhead": {
+    "logical_qubit_patch_physical_qubit_count": {
+      "formula": "2 * (d + 1)**2",
+      "distance_d": 25,
+      "physical_qubits_per_logical": 1352.0,
+      "status": "evaluated",
+      "provenance": "computed_from_yaml_formula",
+      "source_parameter": "logical_qubit_patch_physical_qubit_count_formula"
+    }
+  },
+  "logical_fault_model": {
+    "schema": "logical_fault_model_v1",
+    "status": "computed",
+    "logical_error_rate_per_cycle": 5.000000000000004e-15,
+    "logical_error_model": "phenomenological_prefactor_times_p_over_pth_to_half_distance",
+    "exponent_half_distance": 13,
+    "inputs": {
+      "code_distance_d": 25,
+      "physical_gate_error_rate": 0.001,
+      "physical_gate_error_rate_nominal": 0.001,
+      "heuristic_threshold_p_th": 0.01,
+      "heuristic_prefactor_a": 0.05,
+      "p_nominal": 0.001,
+      "p_nominal_gate_proxy_method": "max_1q_2q",
+      "characteristic_physical_gate_error_rate": 0.001,
+      "qcvv_multiplier_sigma": 1.0,
+      "scaling_penalty_log_coefficient_alpha": 0.0,
+      "scaling_penalty_linear_coefficient_beta": 0.0,
+      "scaling_reference_physical_qubits": 20000000.0,
+      "scaling_penalty_factor": 1.0,
+      "p_effective": 0.001,
+      "ver_grounded_on_characteristic_only": true
+    },
+    "logical_cycle_time": {
+      "logical_cycle_time_microseconds": 10.0,
+      "components_microseconds": {
+        "surface_code_cycle_time_microseconds": 1.0,
+        "classical_control_reaction_time_microseconds": 10.0,
+        "qec_decode_latency_microseconds": 2.0,
+        "qec_measurement_round_time_microseconds": 1.5
+      },
+      "provenance": "max_of_available_modality_and_optional_qec_latency_v1"
+    }
+  },
+  "physical_rollup": {
+    "code_distance_d": 25,
+    "physical_qubits_per_logical": 1352.0,
+    "abstract_logical_qubits_at_n": 6189.056,
+    "approximate_data_plane_physical_qubits": 8367603.711999999,
+    "patch_formula_status": "evaluated"
+  },
+  "physical_layer": {
+    "schema": "physical_layer_v1",
+    "document_id": "superconducting_gidney_ekera_2021",
+    "status": "passthrough_from_modality",
+    "notes": [
+      "Optional richness keys (fabrication_variability_proxy, thermal_load_index_proxy, control_plane_saturation_proxy) are surfaced for OSRE transparency when present in modality YAML; they do not enter heuristic p_effective, union-bound distance, or logical_fault_model in this version."
+    ],
+    "parameter_keys": [
+      "coherence_time_t1_microseconds",
+      "coherence_time_t2_microseconds",
+      "control_plane_saturation_proxy",
+      "correlated_noise_parameter",
+      "fabrication_variability_proxy",
+      "idle_error_rate_per_cycle",
+      "leakage_error_rate",
+      "measurement_error_rate",
+      "single_qubit_gate_error_rate",
+      "thermal_load_index_proxy",
+      "two_qubit_gate_error_rate"
+    ],
+    "parameters": {
+      "coherence_time_t2_microseconds": {
+        "value": 60.0,
+        "unit": "microseconds",
+        "confidence": "speculative",
+        "source": "Order-of-magnitude proxy; Gidney & Eker\u00e5 2021 Table 2 does not list T2 separately",
+        "date": "2026-04-15",
+        "section": "SQuaRE OSRE extension",
+        "layer": "physical"
+      },
+      "coherence_time_t1_microseconds": {
+        "value": 80.0,
+        "unit": "microseconds",
+        "confidence": "speculative",
+        "source": "Order-of-magnitude superconducting coherence literature; not a Table 2 column in Gidney & Eker\u00e5 2021",
+        "date": "2026-04-15",
+        "section": "SQuaRE OSRE extension",
+        "notes": "Replace with device-calibrated T1 when tying to QCVV.",
+        "layer": "physical"
+      },
+      "fabrication_variability_proxy": {
+        "value": 0.0,
+        "unit": "dimensionless_order_one",
+        "confidence": "speculative",
+        "source": "Placeholder 0 = no extra fabrication spread; OSRE memo variability slot",
+        "date": "2026-04-15",
+        "section": "SQuaRE OSRE extension",
+        "layer": "physical"
+      },
+      "single_qubit_gate_error_rate": {
+        "value": 0.0006,
+        "unit": "error_probability_per_gate",
+        "confidence": "speculative",
+        "source": "Illustrative ratio vs headline two-qubit error; refine from calibration stack",
+        "date": "2026-04-15",
+        "section": "SQuaRE OSRE extension",
+        "layer": "physical"
+      },
+      "thermal_load_index_proxy": {
+        "value": 0.0,
+        "unit": "dimensionless_order_one",
+        "confidence": "speculative",
+        "source": "Placeholder 0 = no thermal headroom penalty in this headline row",
+        "date": "2026-04-15",
+        "section": "SQuaRE OSRE extension",
+        "layer": "physical"
+      },
+      "correlated_noise_parameter": {
+        "value": 1.0,
+        "unit": "dimensionless_multiplier",
+        "confidence": "speculative",
+        "source": "Baseline 1.0 = no explicit correlated-noise penalty in this Table 2 headline row",
+        "date": "2026-04-15",
+        "section": "SQuaRE OSRE extension",
+        "notes": "OSRE memo scaling penalties can replace this multiplier in future YAML.",
+        "layer": "physical"
+      },
+      "idle_error_rate_per_cycle": {
+        "value": 0.0001,
+        "unit": "error_probability_per_idle_slot_proxy",
+        "confidence": "speculative",
+        "source": "Proxy idle error between active gates; refine from control model",
+        "date": "2026-04-15",
+        "section": "SQuaRE OSRE extension",
+        "layer": "physical"
+      },
+      "two_qubit_gate_error_rate": {
+        "value": 0.001,
+        "unit": "error_probability_per_gate",
+        "confidence": "estimated",
+        "source": "Gidney & Eker\u00e5, Quantum 2021 (Table 2, 0.1% headline physical error)",
+        "date": "2021-04-15",
+        "section": "Table 2",
+        "notes": "Matches characteristic_physical_gate_error_rate for the Table 2 \u201c(ours) 2019\u201d row intent.",
+        "layer": "physical"
+      },
+      "control_plane_saturation_proxy": {
+        "value": 0.0,
+        "unit": "dimensionless_order_one",
+        "confidence": "speculative",
+        "source": "Placeholder 0 = no control-plane saturation term in this profile",
+        "date": "2026-04-15",
+        "section": "SQuaRE OSRE extension",
+        "layer": "physical"
+      },
+      "leakage_error_rate": {
+        "value": 1e-05,
+        "unit": "error_probability_per_gate_proxy",
+        "confidence": "speculative",
+        "source": "Small leakage proxy; not discussed numerically in Gidney & Eker\u00e5 2021 Table 2",
+        "date": "2026-04-15",
+        "section": "SQuaRE OSRE extension",
+        "layer": "physical"
+      },
+      "measurement_error_rate": {
+        "value": 0.005,
+        "unit": "error_probability_per_shot",
+        "confidence": "speculative",
+        "source": "Typical order-of-magnitude readout error for resource models; not pinned in G&E Table 2",
+        "date": "2026-04-15",
+        "section": "SQuaRE OSRE extension",
+        "layer": "physical"
+      }
+    }
+  },
+  "system_metrics": {
+    "schema": "system_metrics_v2",
+    "status": "computed",
+    "notes": [
+      "LQC is a logical-slot proxy from pinned total physical qubits and YAML factory footprint; routing is only subtracted when scenario.system_metrics.routing_margin_logical_qubits is set.",
+      "LOB uses \u03b5 / (p_L \u00d7 s_QEM) with phenomenological p_L from logical_fault_model (p_L is driven by heuristic p_effective: p_nominal \u00d7 QCVV \u03c3 \u00d7 scaling penalty on that stack, not by validated_error_rate_ver, which is headline characteristic \u00d7 \u03c3 only) and QEM effective_logical_error_rate_suppression_factor as s_QEM (1 when no QEM path).",
+      "QOT is abstract-depth-proxies per wall-clock second: parallel_width / \u03c4 with \u03c4 from logical_fault_model and width from schedule_model_v1.ccz_factory_count or scenario CCZ count.",
+      "VER omitted: no paths.qcvv (QCVV profile) in scenario.",
+      "mitigated_operations_ceiling omitted: no paths.qem (QEM profile) in scenario."
+    ],
+    "logical_qubit_capacity_lqc": 14585.0,
+    "logical_qubit_capacity_lqc_method": "floor((reported_end_to_end_physical_qubits - factory_footprint_physical_qubits) / physical_qubits_per_logical - routing_margin_logical_qubits)",
+    "logical_operations_budget_lob": 19999999999999.984,
+    "headroom_logical_depth": 19997856710655.984,
+    "quantum_operations_throughput_qot": 2800000.0000000005,
+    "validated_error_rate_ver": null,
+    "mitigated_operations_ceiling": null
+  },
+  "parameter_sensitivity": {
+    "schema": "parameter_sensitivity_v1",
+    "status": "computed",
+    "method": "symmetric_relative_finite_difference",
+    "relative_perturbation": 1e-05,
+    "rows": [
+      {
+        "parameter": "physical_gate_error_rate_effective",
+        "layer": "derived",
+        "metric": "code_distance_d",
+        "baseline_parameter_value": 0.001,
+        "baseline_metric_value": 25.0,
+        "derivative_metric_per_parameter": 0.0,
+        "elasticity_metric_times_parameter_over_value": 0.0
+      },
+      {
+        "parameter": "heuristic_surface_code_physical_threshold_order_of_magnitude",
+        "layer": "qec",
+        "metric": "code_distance_d",
+        "baseline_parameter_value": 0.01,
+        "baseline_metric_value": 25.0,
+        "derivative_metric_per_parameter": 0.0,
+        "elasticity_metric_times_parameter_over_value": 0.0
+      },
+      {
+        "parameter": "surface_code_cycle_time",
+        "layer": "modality",
+        "metric": "naive_serial_time_days",
+        "baseline_parameter_value": 1.0,
+        "baseline_metric_value": 0.02480658962962963,
+        "derivative_metric_per_parameter": 0.02480658962962963,
+        "elasticity_metric_times_parameter_over_value": 1.0
+      }
+    ],
+    "ranking_by_abs_derivative_code_distance_d": [
+      "surface_code_cycle_time",
+      "physical_gate_error_rate_effective",
+      "heuristic_surface_code_physical_threshold_order_of_magnitude"
+    ],
+    "notes": [
+      "Finite differences use relative step 1e-5 on effective gate error and threshold; code_distance_d is discrete so derivatives are secants between perturbed optima.",
+      "scaling_reference_physical_qubits for penalty: 20000000.0"
+    ]
+  },
+  "qec_distance_resolution": {
+    "mode": "heuristic_union_bound",
+    "distance_d": 25,
+    "heuristic": {
+      "model": "phenomenological_union_bound_v1",
+      "physical_gate_error_rate": 0.001,
+      "logical_qubit_count": 6189.056,
+      "qec_cycle_count_proxy": 2143289344.0,
+      "logical_error_budget": 0.1,
+      "phenomenological_p_th": 0.01,
+      "phenomenological_prefactor": 0.05,
+      "min_d": 5,
+      "max_d": 55,
+      "closed_form_distance_d": 25,
+      "half_distance_float": 12.821675221385119,
+      "optimizer": "discrete_odd_d_scan_v1",
+      "epsilon_per_logical_per_cycle_proxy": 7.538670870688327e-15,
+      "p_over_p_th": 0.1,
+      "scan_rows": [
+        {
+          "distance_d": 5,
+          "union_bound_mass": 663246888.7109634,
+          "satisfies_budget": false
+        },
+        {
+          "distance_d": 7,
+          "union_bound_mass": 66324688.871096335,
+          "satisfies_budget": false
+        },
+        {
+          "distance_d": 9,
+          "union_bound_mass": 6632468.8871096345,
+          "satisfies_budget": false
+        },
+        {
+          "distance_d": 11,
+          "union_bound_mass": 663246.8887109635,
+          "satisfies_budget": false
+        },
+        {
+          "distance_d": 13,
+          "union_bound_mass": 66324.68887109634,
+          "satisfies_budget": false
+        },
+        {
+          "distance_d": 15,
+          "union_bound_mass": 6632.468887109635,
+          "satisfies_budget": false
+        },
+        {
+          "distance_d": 17,
+          "union_bound_mass": 663.2468887109635,
+          "satisfies_budget": false
+        },
+        {
+          "distance_d": 19,
+          "union_bound_mass": 66.32468887109636,
+          "satisfies_budget": false
+        },
+        {
+          "distance_d": 21,
+          "union_bound_mass": 6.632468887109636,
+          "satisfies_budget": false
+        },
+        {
+          "distance_d": 23,
+          "union_bound_mass": 0.6632468887109636,
+          "satisfies_budget": false
+        },
+        {
+          "distance_d": 25,
+          "union_bound_mass": 0.06632468887109637,
+          "satisfies_budget": true
+        },
+        {
+          "distance_d": 27,
+          "union_bound_mass": 0.006632468887109637,
+          "satisfies_budget": true
+        },
+        {
+          "distance_d": 29,
+          "union_bound_mass": 0.0006632468887109638,
+          "satisfies_budget": true
+        },
+        {
+          "distance_d": 31,
+          "union_bound_mass": 6.632468887109638e-05,
+          "satisfies_budget": true
+        },
+        {
+          "distance_d": 33,
+          "union_bound_mass": 6.632468887109639e-06,
+          "satisfies_budget": true
+        },
+        {
+          "distance_d": 35,
+          "union_bound_mass": 6.632468887109639e-07,
+          "satisfies_budget": true
+        },
+        {
+          "distance_d": 37,
+          "union_bound_mass": 6.63246888710964e-08,
+          "satisfies_budget": true
+        },
+        {
+          "distance_d": 39,
+          "union_bound_mass": 6.63246888710964e-09,
+          "satisfies_budget": true
+        },
+        {
+          "distance_d": 41,
+          "union_bound_mass": 6.63246888710964e-10,
+          "satisfies_budget": true
+        },
+        {
+          "distance_d": 43,
+          "union_bound_mass": 6.632468887109641e-11,
+          "satisfies_budget": true
+        },
+        {
+          "distance_d": 45,
+          "union_bound_mass": 6.632468887109641e-12,
+          "satisfies_budget": true
+        },
+        {
+          "distance_d": 47,
+          "union_bound_mass": 6.632468887109641e-13,
+          "satisfies_budget": true
+        },
+        {
+          "distance_d": 49,
+          "union_bound_mass": 6.632468887109641e-14,
+          "satisfies_budget": true
+        },
+        {
+          "distance_d": 51,
+          "union_bound_mass": 6.632468887109642e-15,
+          "satisfies_budget": true
+        },
+        {
+          "distance_d": 53,
+          "union_bound_mass": 6.632468887109643e-16,
+          "satisfies_budget": true
+        },
+        {
+          "distance_d": 55,
+          "union_bound_mass": 6.632468887109643e-17,
+          "satisfies_budget": true
+        }
+      ],
+      "distance_d": 25
+    },
+    "logical_error_budget": 0.1,
+    "distance_optimizer": "discrete_scan",
+    "physical_gate_error_rate_effective": 0.001
+  },
+  "layout_estimate": {
+    "approximate_data_plane_physical_qubits": 8367603.711999999,
+    "reported_end_to_end_physical_qubits": 20000000.0,
+    "derived_non_data_overhead_physical_qubits": 11632396.288,
+    "factory_footprint_physical_qubits_from_yaml": 280000.0,
+    "physical_qubits_per_ccz_factory_approximate_key": "physical_qubits_per_ccz_factory_approximate",
+    "provenance": "layout_proxy_v1"
+  },
+  "layout_optimization": {
+    "summary": {
+      "objective": "minimize_odd_code_distance_subject_to_union_bound",
+      "logical_error_budget": 0.1,
+      "selected_code_distance_d": 25,
+      "selected_row": {
+        "distance_d": 25,
+        "union_bound_mass": 0.06632468887109637,
+        "satisfies_budget": true,
+        "physical_qubits_per_logical": 1352.0,
+        "approximate_data_plane_physical_qubits": 8367603.711999999,
+        "total_physical_qubits_proxy_data_plus_factories": 8647603.712,
+        "absolute_residual_vs_reported_total": 11352396.288
+      },
+      "count_candidates": 26,
+      "count_satisfying_budget": 16,
+      "best_fit_distance_d_by_reported_total_residual": null,
+      "patch_formula": "2 * (d + 1)**2",
+      "provenance": "layout_proxy_scan_v1"
+    },
+    "candidates": null
+  },
+  "timing": {
+    "reported_table2_pinned": {
+      "ccz_factory_count": 28,
+      "physical_qubits_millions": 20.0,
+      "physical_qubits_millions_key": "paper_table2_rsa2048_reference_rows#ccz_factories=28",
+      "megaqubit_days": 5.9,
+      "megaqubit_days_key": "paper_table2_rsa2048_reference_rows#ccz_factories=28",
+      "wall_clock_days": 0.31,
+      "wall_clock_days_key": "paper_table2_rsa2048_reference_rows#ccz_factories=28",
+      "source_parameter": "paper_table2_rsa2048_reference_rows",
+      "layout_descriptor": "reaction_limited_carry_runways",
+      "provenance": "pinned_in_magic_yaml_table2"
+    },
+    "naive_serial_from_measurement_depth": {
+      "abstract_measurement_depth_layers": 2143289344.0,
+      "surface_code_cycle_time_microseconds": 1.0,
+      "serial_time_microseconds": 2143289344.0,
+      "serial_time_days": 0.02480658962962963,
+      "provenance": "computed_from_measurement_depth_times_surface_cycle",
+      "source_parameters": {
+        "depth": "abstract_measurement_depth_formula",
+        "cycle": "surface_code_cycle_time"
+      }
+    },
+    "schedule_model_v1": {
+      "model": "parallel_depth_over_ccz_paths_v1",
+      "reaction_limited": true,
+      "surface_code_cycle_time_microseconds": 1.0,
+      "classical_control_reaction_time_microseconds": 10.0,
+      "effective_layer_time_microseconds": 10.0,
+      "abstract_measurement_depth_layers": 2143289344.0,
+      "ccz_factory_count": 28,
+      "wall_clock_microseconds": 765460480.0,
+      "wall_clock_days": 0.008859496296296296,
+      "provenance": "heuristic_schedule_v1",
+      "reaction_limited_inferred_from": "default_reaction_limited_unless_distillation_in_row_or_factory_key"
+    },
+    "schedule_calibration": {
+      "naive_serial_time_days": 0.02480658962962963,
+      "schedule_model_v1_wall_clock_days": 0.008859496296296296,
+      "ratio_naive_serial_over_model_v1": 2.8000000000000003,
+      "provenance": "ratio_of_estimates",
+      "table2_pinned_wall_clock_days": 0.31,
+      "ratio_table2_pinned_over_model_v1": 34.99070258989726
+    }
+  },
+  "dashboard": {
+    "ccz_factory_count": 28,
+    "ccz_factory_parameter_key": "reaction_limited_carry_runways",
+    "table2_pinned_source_parameter": "paper_table2_rsa2048_reference_rows",
+    "table2_pinned_row_layout_descriptor": "reaction_limited_carry_runways",
+    "rsa_2048_reported_physical_qubits_millions_key": "paper_table2_rsa2048_reference_rows#ccz_factories=28",
+    "reported_rsa2048_physical_qubits_millions": 20.0,
+    "rsa_2048_reported_megaqubit_days_key": "paper_table2_rsa2048_reference_rows#ccz_factories=28",
+    "reported_rsa2048_megaqubit_days": 5.9,
+    "rsa_2048_reported_wall_clock_days_key": "paper_table2_rsa2048_reference_rows#ccz_factories=28",
+    "reported_rsa2048_wall_clock_days": 0.31,
+    "naive_serial_time_days_from_depth_times_cycle": 0.02480658962962963,
+    "logical_qubits_at_n": 6189.056,
+    "toffoli_plus_t_halves_billions_at_n": 2.7,
+    "minimum_spacetime_volume_megaqubitdays_at_n": 5.9,
+    "logical_qubit_physical_qubits_if_distance_d": 1352.0,
+    "approximate_data_plane_physical_qubits": 8367603.711999999,
+    "t_factory_fallback_recommended": false,
+    "t_factory_transition_modulus_bits_order_of_magnitude": 32786,
+    "code_distance_d": 25,
+    "qec_distance_resolution_mode": "heuristic_union_bound",
+    "derived_non_data_overhead_physical_qubits": 11632396.288,
+    "factory_footprint_physical_qubits_from_yaml": 280000.0,
+    "schedule_model_v1_wall_clock_days": 0.008859496296296296,
+    "schedule_calibration_ratio_table2_over_model_v1": 34.99070258989726,
+    "logical_failure_probability_union_depth_proxy": 1.0716446720000008e-05,
+    "magic_supply_adequate": true,
+    "magic_limited_runtime_multiplier": 1.0
+  }
+}

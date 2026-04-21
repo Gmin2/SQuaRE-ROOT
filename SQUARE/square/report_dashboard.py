@@ -6,6 +6,10 @@ from collections.abc import Mapping
 from typing import Any
 
 from square.report_magic_throughput import compute_magic_throughput_dashboard_fields
+from square.yaml_numeric import read_evaluated_abstract_measurement_depth_layers
+
+# ``depth_layers=...`` uses this default so ``None`` means "caller already evaluated depth" (no re-read).
+_UNSET_DEPTH: object = object()
 
 
 def compute_logical_failure_probability_union_depth_proxy(
@@ -13,9 +17,13 @@ def compute_logical_failure_probability_union_depth_proxy(
     logical_fault_model: Mapping[str, Any],
     evaluated: Mapping[str, Any],
     warnings: list[str],
+    depth_layers: float | None | object = _UNSET_DEPTH,
 ) -> float | None:
     """
     Conservative union-style logical failure proxy ``min(1, D × p_L)``.
+
+    Optional ``depth_layers`` avoids a second parse when the caller already read ``D`` via
+    :func:`square.yaml_numeric.read_evaluated_abstract_measurement_depth_layers`.
 
     ``D`` is ``algorithm_metrics.evaluated.abstract_measurement_depth_layers.value`` (logical depth proxy).
     ``p_L`` is ``logical_fault_model.logical_error_rate_per_cycle`` (phenomenological per-cycle rate).
@@ -38,18 +46,15 @@ def compute_logical_failure_probability_union_depth_proxy(
         )
         return None
 
-    depth_entry = evaluated.get("abstract_measurement_depth_layers")
-    d_layers: float | None = None
-    if isinstance(depth_entry, dict) and depth_entry.get("value") is not None:
-        try:
-            d_layers = float(depth_entry["value"])
-        except (TypeError, ValueError):
-            d_layers = None
-    if d_layers is None or d_layers < 0.0:
-        warnings.append(
-            "dashboard.logical_failure_probability_union_depth_proxy omitted: need non-negative numeric "
-            "algorithm_metrics.evaluated.abstract_measurement_depth_layers.value (depth proxy D)."
+    if depth_layers is _UNSET_DEPTH:
+        d_layers = read_evaluated_abstract_measurement_depth_layers(
+            evaluated,
+            warnings,
+            context="dashboard.logical_failure_probability_union_depth_proxy",
         )
+    else:
+        d_layers = depth_layers  # type: ignore[assignment]
+    if d_layers is None:
         return None
 
     return min(1.0, d_layers * p_l)
@@ -110,10 +115,16 @@ def build_dashboard_fields(
     ``magic_supply_adequate`` / ``magic_limited_runtime_multiplier`` come from
     :func:`square.report_magic_throughput.compute_magic_throughput_dashboard_fields`.
     """
+    depth_layers = read_evaluated_abstract_measurement_depth_layers(
+        evaluated,
+        warnings,
+        context="dashboard.abstract_measurement_depth_layers",
+    )
     fail_p = compute_logical_failure_probability_union_depth_proxy(
         logical_fault_model=logical_fault_model,
         evaluated=evaluated,
         warnings=warnings,
+        depth_layers=depth_layers,
     )
     magic_tp = compute_magic_throughput_dashboard_fields(
         magic=magic,
@@ -122,6 +133,7 @@ def build_dashboard_fields(
         schedule_model_v1=schedule_model_v1,
         naive_serial_timing=naive_serial_timing,
         warnings=warnings,
+        depth_layers=depth_layers,
     )
     base: dict[str, Any] = {
         "ccz_factory_count": ccz_count,

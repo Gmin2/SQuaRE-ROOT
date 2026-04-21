@@ -141,7 +141,7 @@ def test_build_report_rsa2048_parallel() -> None:
     assert report["sources"]["qcvv"] is None
     assert report["sources"]["qem"] is None
 
-    json.dumps(report)
+    json.dumps(report, allow_nan=False)
     md = report_to_markdown(report)
     assert "Physical layer (OSRE snapshot)" in md
     assert "Notes:" in md
@@ -216,7 +216,7 @@ def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
     expected_days = 70_000_000.0 * 1.0 / 1e6 / 86400.0
     assert timing["serial_time_days"] == pytest.approx(expected_days)
 
-    json.dumps(report)
+    json.dumps(report, allow_nan=False)
 
 
 def test_build_report_physical_layer_cain_neutral_atom() -> None:
@@ -277,7 +277,7 @@ def test_oratomic_gold_path_report() -> None:
 
     assert report["parameter_sensitivity"]["status"] == "computed"
 
-    json.dumps(report)
+    json.dumps(report, allow_nan=False)
     md = report_to_markdown(report)
     assert "oratomic_gold_path" in md
 
@@ -381,7 +381,7 @@ def test_build_report_with_code_distance_evaluates_patch_and_rollup() -> None:
     assert pr["approximate_data_plane_physical_qubits"] == pytest.approx(logical * 648.0)
     assert pr["patch_formula_status"] == "evaluated"
 
-    json.dumps(report)
+    json.dumps(report, allow_nan=False)
 
 
 def test_emit_optimization_trace_includes_layout_candidates(tmp_path: Path) -> None:

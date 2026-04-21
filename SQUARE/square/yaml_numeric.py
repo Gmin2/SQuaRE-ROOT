@@ -6,6 +6,7 @@ Centralizes coercion that previously failed silently (``None`` without explanati
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from typing import Any
 
@@ -178,6 +179,39 @@ def read_scalar_float(
     except (TypeError, ValueError):
         warnings.append(f"{context}: expected numeric scalar; got {type(value).__name__!r}.")
         return None
+
+
+def read_evaluated_abstract_measurement_depth_layers(
+    evaluated: Mapping[str, Any],
+    warnings: list[str],
+    *,
+    context: str,
+) -> float | None:
+    """
+    Read ``evaluated.abstract_measurement_depth_layers.value`` as a **finite** float ``>= 0``.
+
+    Shared by dashboard union-failure proxy, magic throughput demand, and system-metrics headroom so
+    ``NaN`` / ``inf`` never reach ``json.dumps(..., allow_nan=False)``.
+    """
+    entry = evaluated.get("abstract_measurement_depth_layers")
+    if not isinstance(entry, dict) or entry.get("value") is None:
+        warnings.append(
+            f"{context}: need evaluated.abstract_measurement_depth_layers with a numeric value."
+        )
+        return None
+    try:
+        v = float(entry["value"])
+    except (TypeError, ValueError):
+        warnings.append(
+            f"{context}: evaluated.abstract_measurement_depth_layers.value not coercible to float."
+        )
+        return None
+    if not math.isfinite(v) or v < 0.0:
+        warnings.append(
+            f"{context}: evaluated.abstract_measurement_depth_layers must be finite and >= 0 (got {v!r})."
+        )
+        return None
+    return v
 
 
 def read_evaluated_metric_float(

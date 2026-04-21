@@ -12,7 +12,7 @@ Sample uncertain parameters **θ** from priors in a study YAML, evaluate the det
 ## Forward model
 
 - :func:`square.mc.evaluate_forward_model` — patches modality/QEC numeric `parameter_entry` values, runs :func:`square.report.build_scenario_report`. With ``include_full_report=False``, the report builder returns only ``dashboard`` and ``algorithm_metrics`` (not the full contract envelope), but still executes the same pre-dashboard pipeline (formulas, ``d``, rollup, timing) per sample — it is not a constant-time shortcut.
-- **Charts:** with optional ``matplotlib`` (``pip install -e ".[plots]"``), ``square-mc … --plot`` writes a three-panel PNG (failure-proxy histogram, magic-multiplier histogram, first varying ``PARAMETER_LAYERS`` key vs failure proxy). Replot an existing CSV via ``python scripts/plot_mc_csv.py mc_samples_*.csv``.
+- **Charts:** with optional ``matplotlib`` (``pip install -e ".[plots]"``), ``square-mc … --plot`` writes a three-panel PNG (failure-proxy histogram, magic-multiplier histogram, θ vs failure proxy). Use ``--plot-theta <key>`` for a fixed ``PARAMETER_LAYERS`` column on the x-axis; otherwise the first **varying** column in the study’s ``parameter_keys`` order is used, then registry order. Replot an existing CSV via ``python scripts/plot_mc_csv.py mc_samples_*.csv [--theta KEY]``.
 - Default per-sample metrics from :func:`square.mc.forward_model.extract_default_mc_metrics` include dashboard scalars such as ``logical_failure_probability_union_depth_proxy`` (``min(1, D×p_L)`` union proxy when inputs exist) and ``magic_limited_runtime_multiplier`` (when the magic throughput dashboard check runs; otherwise ``null`` in the extracted float slice).
 - Supported θ keys: :data:`square.mc.PARAMETER_LAYERS`.
 

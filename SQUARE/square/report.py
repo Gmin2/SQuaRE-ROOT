@@ -95,7 +95,7 @@ def _build_physical_layer_snapshot(
     Passthrough of extended physical parameters from modality YAML into a stable report envelope.
 
     Full modality parameters remain under ``layers.modality.parameters``; this block duplicates only
-    OSRE-aligned keys for tooling. See ``docs/output-contract.md`` § ``physical_layer``.
+    OSRE-aligned keys for tooling. See ``docs/output-contract.md`` (physical_layer section).
     """
     picked: dict[str, Any] = {}
     for key in OSRE_PHYSICAL_LAYER_SNAPSHOT_KEYS:

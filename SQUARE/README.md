@@ -77,7 +77,7 @@ From Python: `square.build_scenario_report(square.load_scenario_bundle(path))` a
 
 ### Charts and interactive exploration
 
-- **CLI plots (optional):** after `pip install -e ".[plots]"` (or add `matplotlib`), append **`--plot`** to `square-report` to write a PNG of the union failure proxy, magic throughput multiplier / adequacy, and schedule text. Default path: `<scenario_stem>_report_semantics.png`; override with **`--plot-output PATH`**. The same flag on **`square-mc`** writes `mc_samples_<study_id>_semantics.png` (or `--plot-output`) from the just-generated samples.
-- **Script:** `python scripts/plot_mc_csv.py path/to/mc_samples.csv` re-renders that figure from an existing CSV.
+- **CLI plots (optional):** after `pip install -e ".[plots]"` (or add `matplotlib`), append **`--plot`** to `square-report` to write a PNG of the union failure proxy, magic throughput multiplier / adequacy, and schedule text. Default path: `<scenario_stem>_report_semantics.png`; override with **`--plot-output PATH`**. JSON/Markdown is written to stdout **before** the plot; if plotting fails, exit code is **`3`** (report was already emitted). The same **`--plot`** on **`square-mc`** writes `mc_samples_<study_id>_semantics.png` (or `--plot-output`). Use **`--plot-theta <PARAMETER_LAYERS key>`** to fix the MC scatter x-axis (must appear as a column in the sample CSV).
+- **Script:** `python scripts/plot_mc_csv.py path/to/mc_samples.csv` re-renders that figure from an existing CSV; **`--theta`** / **`-t`** matches **`square-mc --plot-theta`**.
 - **Notebook:** `notebooks/osre_interactive_report.ipynb` — sliders only override keys in `PARAMETER_LAYERS` that exist in the loaded stack; **Build report** shows `extract_report_plot_frame` plus warnings and the same semantics PNG (`pip install -e ".[interactive]"`).
 - **Thin web UI:** `pip install -e ".[web]"` then from `SQUARE/`: `streamlit run scripts/interactive_report_streamlit.py` — same binding rules as the notebook.

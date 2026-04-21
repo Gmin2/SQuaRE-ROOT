@@ -1,9 +1,9 @@
 """
 Charts for SQuaRE reports and Monte Carlo samples.
 
-Uses **frozen** report keys (``dashboard``, ``timing``, ``logical_fault_model``) and MC column
-names aligned with :data:`square.mc.overrides.PARAMETER_LAYERS` and
-:data:`square.mc.forward_model.MC_DASHBOARD_METRIC_FIELDS`.
+Dashboard columns mirror :data:`square.mc.forward_model.MC_DASHBOARD_METRIC_FIELDS` plus
+``magic_supply_adequate`` and ``schedule_calibration_ratio_table2_over_model_v1``.
+θ columns for MC scatter follow :data:`square.mc.overrides.PARAMETER_LAYERS`.
 
 Matplotlib is **optional** at import time; callers that render figures must install
 ``square[plots]`` (or ``pip install matplotlib``).
@@ -12,20 +12,21 @@ Matplotlib is **optional** at import time; callers that render figures must inst
 from __future__ import annotations
 
 import csv
+import sys
 from collections.abc import Mapping, Sequence
+from io import BufferedIOBase
 from pathlib import Path
 from typing import Any
 
+from square.mc.forward_model import MC_DASHBOARD_METRIC_FIELDS
 from square.mc.overrides import PARAMETER_LAYERS
 
-# Dashboard / timing keys used by charts (stable contract surface).
-REPORT_PLOT_DASHBOARD_KEYS: tuple[str, ...] = (
-    "logical_failure_probability_union_depth_proxy",
+_extra_plot_dash_keys: tuple[str, ...] = (
     "magic_supply_adequate",
-    "magic_limited_runtime_multiplier",
     "schedule_calibration_ratio_table2_over_model_v1",
-    "code_distance_d",
-    "naive_serial_time_days_from_depth_times_cycle",
+)
+REPORT_PLOT_DASHBOARD_KEYS: tuple[str, ...] = tuple(
+    dict.fromkeys([dash for _, dash in MC_DASHBOARD_METRIC_FIELDS] + list(_extra_plot_dash_keys))
 )
 
 
@@ -61,7 +62,8 @@ def _require_pyplot() -> Any:
     try:
         import matplotlib
 
-        matplotlib.use("Agg")
+        if "matplotlib.pyplot" not in sys.modules:
+            matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except ImportError as exc:  # pragma: no cover - exercised when matplotlib missing
         raise RuntimeError(
@@ -71,12 +73,42 @@ def _require_pyplot() -> Any:
     return plt
 
 
-def write_report_semantics_png(path: str | Path, report: Mapping[str, Any], *, dpi: int = 120) -> Path:
-    """
-    Write a single PNG summarizing **failure proxy**, **magic throughput flags**, and schedule calibration.
+def _pick_mc_theta_column(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    theta_parameter_key: str | None,
+    study_parameter_key_order: Sequence[str] | None,
+) -> str | None:
+    """Resolve which CSV column labels the x-axis for θ vs failure proxy."""
+    if not rows:
+        return None
+    row_keys = set(rows[0].keys())
+    if theta_parameter_key:
+        if theta_parameter_key in row_keys:
+            return theta_parameter_key
+        return None
+    order = list(study_parameter_key_order) if study_parameter_key_order else list(PARAMETER_LAYERS.keys())
+    for k in order:
+        if k not in PARAMETER_LAYERS or k not in row_keys:
+            continue
+        xs = [r.get(k) for r in rows]
+        vals = [float(x) for x in xs if isinstance(x, (int, float))]
+        if len(vals) >= 2 and max(vals) != min(vals):
+            return k
+    return None
 
-    Y-axis semantics: union depth failure proxy is on ``[0, 1]`` (clipped for display only);
-    magic multiplier uses a log-scaled inset when ``> 1``; adequate supply is a categorical color strip.
+
+def write_report_semantics_png(
+    path: str | Path | BufferedIOBase,
+    report: Mapping[str, Any],
+    *,
+    dpi: int = 120,
+) -> Path | BufferedIOBase:
+    """
+    Write a single PNG summarizing **failure proxy**, **magic throughput multiplier**, and schedule text.
+
+    The failure-proxy bar **clips display** to ``[0, 1]`` (raw value still labeled). The multiplier bar
+    **clips display** at 50× with an annotation when the true value exceeds that cap.
     """
     plt = _require_pyplot()
     frame = extract_report_plot_frame(report)
@@ -140,11 +172,15 @@ def write_report_semantics_png(path: str | Path, report: Mapping[str, Any], *, d
     ]
     ax.text(0.02, 0.98, "\n".join(lines), transform=ax.transAxes, va="top", fontsize=9, family="monospace")
 
-    outp = Path(path)
-    outp.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(outp, dpi=dpi)
+    if isinstance(path, (str, Path)):
+        outp = Path(path)
+        outp.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(outp, dpi=dpi)
+        plt.close(fig)
+        return outp
+    fig.savefig(path, dpi=dpi)
     plt.close(fig)
-    return outp
+    return path
 
 
 def load_mc_samples_rows_from_csv(path: str | Path) -> list[dict[str, Any]]:
@@ -167,14 +203,18 @@ def load_mc_samples_rows_from_csv(path: str | Path) -> list[dict[str, Any]]:
 
 
 def write_mc_semantics_png(
-    path: str | Path,
+    path: str | Path | BufferedIOBase,
     rows: Sequence[Mapping[str, Any]],
     *,
     dpi: int = 120,
-) -> Path:
+    theta_parameter_key: str | None = None,
+    study_parameter_key_order: Sequence[str] | None = None,
+) -> Path | BufferedIOBase:
     """
     Write a multi-panel figure from MC sample rows: failure proxy distribution, magic multiplier,
-    and scatter of the first varying ``PARAMETER_LAYERS`` key vs failure proxy when available.
+    and scatter of ``theta_parameter_key`` vs failure proxy when set; otherwise the first **varying**
+    key in ``study_parameter_key_order`` (Monte Carlo study ``parameter_keys``), else dict order of
+    ``PARAMETER_LAYERS``.
     """
     plt = _require_pyplot()
     fail_key = "logical_failure_probability_union_depth_proxy"
@@ -190,13 +230,11 @@ def write_mc_semantics_png(
         if r.get(mult_key) is not None and isinstance(r.get(mult_key), (int, float))
     ]
 
-    param_key: str | None = None
-    for k in PARAMETER_LAYERS:
-        xs = [r.get(k) for r in rows]
-        vals = [float(x) for x in xs if isinstance(x, (int, float))]
-        if len(vals) >= 2 and max(vals) != min(vals):
-            param_key = k
-            break
+    param_key = _pick_mc_theta_column(
+        rows,
+        theta_parameter_key=theta_parameter_key,
+        study_parameter_key_order=study_parameter_key_order,
+    )
 
     fig, axes = plt.subplots(1, 3, figsize=(12, 3.2), constrained_layout=True)
     fig.suptitle("Monte Carlo — failure proxy, magic multiplier, θ correlation", fontsize=11)
@@ -235,13 +273,17 @@ def write_mc_semantics_png(
         ax.set_xlabel(param_key)
         ax.set_ylabel(fail_key)
     else:
-        ax.text(0.5, 0.5, "no varying\nPARAMETER_LAYERS\nor failure proxy", ha="center", va="center", transform=ax.transAxes)
+        ax.text(0.5, 0.5, "no θ column\nor failure proxy", ha="center", va="center", transform=ax.transAxes)
 
-    outp = Path(path)
-    outp.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(outp, dpi=dpi)
+    if isinstance(path, (str, Path)):
+        outp = Path(path)
+        outp.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(outp, dpi=dpi)
+        plt.close(fig)
+        return outp
+    fig.savefig(path, dpi=dpi)
     plt.close(fig)
-    return outp
+    return path
 
 
 __all__ = [

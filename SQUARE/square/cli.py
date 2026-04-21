@@ -17,7 +17,8 @@ def main(argv: list[str] | None = None) -> int:
     Entry point for ``square-report`` / ``python -m square``.
 
     :param argv: Arguments (excluding program name); defaults to ``sys.argv[1:]``.
-    :returns: Process exit code (0 on success).
+    :returns: Process exit code: ``0`` success; ``1`` load/build/serialize errors; ``2`` invalid flags;
+        ``3`` optional ``--plot`` failed after JSON/Markdown was written (stdout already emitted).
     """
     parser = argparse.ArgumentParser(
         prog="square-report",
@@ -95,17 +96,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"square-report: cannot build report: {exc}", file=sys.stderr)
         return 1
 
-    if args.plot:
-        plot_path = args.plot_output
-        if plot_path is None:
-            plot_path = Path(f"{args.scenario.stem}_report_semantics.png")
-        try:
-            write_report_semantics_png(plot_path, report)
-            print(f"square-report: wrote plot -> {plot_path.resolve()}", file=sys.stderr)
-        except RuntimeError as exc:
-            print(f"square-report: --plot failed: {exc}", file=sys.stderr)
-            return 3
-
     if args.markdown:
         try:
             sys.stdout.write(report_to_markdown(report))
@@ -119,4 +109,15 @@ def main(argv: list[str] | None = None) -> int:
         except (BrokenPipeError, OSError, ValueError) as exc:
             print(f"square-report: cannot serialize or write JSON: {exc}", file=sys.stderr)
             return 1
+
+    if args.plot:
+        plot_path = args.plot_output
+        if plot_path is None:
+            plot_path = Path(f"{args.scenario.stem}_report_semantics.png")
+        try:
+            write_report_semantics_png(plot_path, report)
+            print(f"square-report: wrote plot -> {plot_path.resolve()}", file=sys.stderr)
+        except RuntimeError as exc:
+            print(f"square-report: --plot failed: {exc}", file=sys.stderr)
+            return 3
     return 0

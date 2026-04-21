@@ -11,6 +11,7 @@ Run from the ``SQUARE/`` directory (so ``Assumptions/Schemas.yaml`` resolves), a
 
 from __future__ import annotations
 
+import io
 from pathlib import Path
 
 import streamlit as st
@@ -21,14 +22,14 @@ from square.report import build_scenario_report
 from square.yaml_assumption import is_parameter_entry
 
 
-def _slider_bounds(value: float) -> tuple[float, float, float]:
+def _slider_bounds(value: float) -> tuple[float, float]:
     if value == 0.0:
-        return -1e-6, 1e-6, 0.0
+        return -1e-6, 1e-6
     lo = value * 0.25
     hi = value * 4.0
     if lo > hi:
         lo, hi = hi, lo
-    return lo, hi, value
+    return lo, hi
 
 
 def main() -> None:
@@ -36,7 +37,9 @@ def main() -> None:
     st.title("SQuaRE — interactive report (frozen keys)")
     st.caption(
         "Sliders only touch ``PARAMETER_LAYERS`` overrides documented for Monte Carlo; "
-        "outputs mirror ``square-report`` JSON (subset below)."
+        "outputs mirror ``square-report`` JSON (subset below). "
+        "The maintained interactive path is ``notebooks/osre_interactive_report.ipynb``; "
+        "this app is a thin alternative."
     )
 
     col_a, col_b = st.columns(2)
@@ -79,7 +82,7 @@ def main() -> None:
         if not isinstance(raw, (int, float)):
             continue
         base = float(raw)
-        lo, hi, _ = _slider_bounds(base)
+        lo, hi = _slider_bounds(base)
         overrides[key] = st.slider(f"{key} ({layer})", min_value=lo, max_value=hi, value=base, format="%g")
 
     d_raw = st.number_input("Optional code distance override (0 = use scenario heuristic)", 0, 10_000, 0)
@@ -102,10 +105,18 @@ def main() -> None:
                 for w in warns:
                     st.text(str(w))
 
-        plot_path = Path(".streamlit_last_report_semantics.png")
         try:
-            write_report_semantics_png(plot_path, report)
-            st.image(str(plot_path), caption="Semantics chart (same as ``square-report --plot``)")
+            buf = io.BytesIO()
+            write_report_semantics_png(buf, report)
+            png_bytes = buf.getvalue()
+            st.download_button(
+                "Download semantics PNG",
+                data=png_bytes,
+                file_name="report_semantics.png",
+                mime="image/png",
+            )
+            buf.seek(0)
+            st.image(buf, caption="Semantics chart (same as ``square-report --plot``)")
         except RuntimeError as exc:
             st.warning(str(exc))
 

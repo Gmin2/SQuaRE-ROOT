@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from square.yaml_numeric import (
+    read_evaluated_abstract_measurement_depth_layers,
     read_evaluated_metric_float,
     read_modality_characteristic_gate_error,
     read_parameter_entry_float,
@@ -57,3 +58,24 @@ def test_read_positive_parameter_microseconds_warns_non_positive() -> None:
     doc = {"surface_code_cycle_time": {"value": 0.0, "unit": "us"}}
     assert read_positive_parameter_microseconds(doc, "surface_code_cycle_time", warnings, context="m") is None
     assert any("> 0" in w for w in warnings)
+
+
+def test_read_evaluated_abstract_measurement_depth_layers_accepts_finite_nonneg() -> None:
+    w: list[str] = []
+    ev = {"abstract_measurement_depth_layers": {"value": 1e6}}
+    assert read_evaluated_abstract_measurement_depth_layers(ev, w, context="t") == 1e6
+    assert not w
+
+
+def test_read_evaluated_abstract_measurement_depth_layers_rejects_nan() -> None:
+    w: list[str] = []
+    ev = {"abstract_measurement_depth_layers": {"value": float("nan")}}
+    assert read_evaluated_abstract_measurement_depth_layers(ev, w, context="t") is None
+    assert w
+
+
+def test_read_evaluated_abstract_measurement_depth_layers_rejects_negative() -> None:
+    w: list[str] = []
+    ev = {"abstract_measurement_depth_layers": {"value": -1.0}}
+    assert read_evaluated_abstract_measurement_depth_layers(ev, w, context="t") is None
+    assert w

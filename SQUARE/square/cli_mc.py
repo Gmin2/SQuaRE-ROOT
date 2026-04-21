@@ -17,6 +17,7 @@ from square.mc import (
     write_mc_samples_csv,
     write_mc_summary_json,
 )
+from square.mc.overrides import PARAMETER_LAYERS
 from square.plotting import write_mc_semantics_png
 
 
@@ -86,6 +87,13 @@ def main(argv: list[str] | None = None) -> int:
         metavar="PATH",
         help="PNG path for --plot (default: mc_samples_<study_id>_semantics.png in cwd).",
     )
+    parser.add_argument(
+        "--plot-theta",
+        type=str,
+        default=None,
+        metavar="KEY",
+        help="MC scatter x-axis: a PARAMETER_LAYERS key present in the CSV (default: first varying key).",
+    )
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
     if args.samples < 1:
@@ -152,11 +160,34 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.plot:
+        if args.plot_theta is not None:
+            _tk = args.plot_theta.strip()
+            if not _tk:
+                print("square-mc: --plot-theta must be non-empty.", file=sys.stderr)
+                return 2
+            if _tk not in PARAMETER_LAYERS:
+                print(
+                    f"square-mc: --plot-theta must be one of: {', '.join(sorted(PARAMETER_LAYERS))}.",
+                    file=sys.stderr,
+                )
+                return 2
         plot_path = args.plot_output
         if plot_path is None:
             plot_path = Path(f"mc_samples_{spec.study_id}_semantics.png")
         try:
-            write_mc_semantics_png(plot_path, result.rows)
+            theta_key = args.plot_theta.strip() if args.plot_theta else None
+            if theta_key and result.rows and theta_key not in result.rows[0]:
+                print(
+                    f"square-mc: --plot-theta {theta_key!r} not in sample rows; using default θ selection.",
+                    file=sys.stderr,
+                )
+                theta_key = None
+            write_mc_semantics_png(
+                plot_path,
+                result.rows,
+                theta_parameter_key=theta_key,
+                study_parameter_key_order=result.summary.get("parameter_keys"),
+            )
             print(f"Wrote MC semantics plot -> {plot_path.resolve()}")
         except RuntimeError as exc:
             print(f"square-mc: --plot failed: {exc}", file=sys.stderr)

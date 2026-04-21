@@ -1,0 +1,188 @@
+{
+  "mc_summary_contract_version": 1,
+  "study_id": "mc_ecdlp_lhs_uniform_only",
+  "schema_version": 1,
+  "scope": "prior_predictive_only",
+  "n_samples": 200,
+  "seed": 42,
+  "sampling_strategy": "latin_hypercube",
+  "n_jobs": 1,
+  "parameter_keys": [
+    "characteristic_physical_gate_error_rate",
+    "surface_code_cycle_time",
+    "heuristic_surface_code_physical_threshold_order_of_magnitude"
+  ],
+  "metric_keys": [
+    "naive_serial_time_days",
+    "code_distance_d",
+    "approximate_data_plane_physical_qubits",
+    "logical_qubits_at_n",
+    "logical_failure_probability_union_depth_proxy",
+    "magic_limited_runtime_multiplier",
+    "ecdlp_toffoli_gates_upper_bound"
+  ],
+  "quantiles": {
+    "characteristic_physical_gate_error_rate": {
+      "p05": 0.0005805398310732852,
+      "p50": 0.0012510968986631258,
+      "p95": 0.0019242298753547112
+    },
+    "surface_code_cycle_time": {
+      "p05": 0.5754382966035315,
+      "p50": 1.2495014430306655,
+      "p95": 1.9199696365463113
+    },
+    "heuristic_surface_code_physical_threshold_order_of_magnitude": {
+      "p05": 0.005767080396515198,
+      "p50": 0.012486898351889847,
+      "p95": 0.019228112065312202
+    },
+    "naive_serial_time_days": {
+      "p05": 0.0004662115828963798,
+      "p50": 0.001012327558010956,
+      "p95": 0.0015555309555352057
+    },
+    "code_distance_d": {
+      "p05": 17.0,
+      "p50": 19.0,
+      "p95": 29.0
+    },
+    "approximate_data_plane_physical_qubits": {
+      "p05": 939600.0,
+      "p50": 1160000.0,
+      "p95": 2610000.0
+    },
+    "logical_qubits_at_n": {
+      "p05": 1450.0,
+      "p50": 1450.0,
+      "p95": 1450.0
+    },
+    "logical_failure_probability_union_depth_proxy": {
+      "p05": 6.911826311683246e-06,
+      "p50": 2.013230726269848e-05,
+      "p95": 6.213252315661031e-05
+    },
+    "magic_limited_runtime_multiplier": {},
+    "ecdlp_toffoli_gates_upper_bound": {
+      "p05": 70000000.0,
+      "p50": 70000000.0,
+      "p95": 70000000.0
+    }
+  },
+  "moments": {
+    "characteristic_physical_gate_error_rate": {
+      "n": 200.0,
+      "mean": 0.0012500804133251582,
+      "std": 0.0004343924855353968,
+      "min": 0.000505179570045849,
+      "max": 0.001997695284489402
+    },
+    "surface_code_cycle_time": {
+      "n": 200.0,
+      "mean": 1.2501840886401256,
+      "std": 0.43396751839189757,
+      "min": 0.5061017452605348,
+      "max": 1.9974438615523755
+    },
+    "heuristic_surface_code_physical_threshold_order_of_magnitude": {
+      "n": 200.0,
+      "mean": 0.01250066999273687,
+      "std": 0.004339473435795171,
+      "min": 0.005048127835042492,
+      "max": 0.01994087452131586
+    },
+    "naive_serial_time_days": {
+      "n": 200.0,
+      "mean": 0.001012880627370472,
+      "std": 0.00035159405425269483,
+      "min": 0.0004100361362064518,
+      "max": 0.0016182994248688228
+    },
+    "code_distance_d": {
+      "n": 200.0,
+      "mean": 20.59,
+      "std": 3.638418674680157,
+      "min": 17.0,
+      "max": 31.0
+    },
+    "approximate_data_plane_physical_qubits": {
+      "n": 200.0,
+      "mean": 1389970.0,
+      "std": 493566.9013727048,
+      "min": 939600.0,
+      "max": 2969600.0
+    },
+    "logical_qubits_at_n": {
+      "n": 200.0,
+      "mean": 1450.0,
+      "std": 0.0,
+      "min": 1450.0,
+      "max": 1450.0
+    },
+    "logical_failure_probability_union_depth_proxy": {
+      "n": 200.0,
+      "mean": 2.599732083212437e-05,
+      "std": 1.7444842898887224e-05,
+      "min": 4.74956271603369e-06,
+      "max": 6.888874924560861e-05
+    },
+    "magic_limited_runtime_multiplier": {},
+    "ecdlp_toffoli_gates_upper_bound": {
+      "n": 200.0,
+      "mean": 70000000.0,
+      "std": 0.0,
+      "min": 70000000.0,
+      "max": 70000000.0
+    }
+  },
+  "correlations": {
+    "approximate_data_plane_physical_qubits": {
+      "approximate_data_plane_physical_qubits": 1.0,
+      "code_distance_d": 0.996700113749385,
+      "ecdlp_toffoli_gates_upper_bound": null,
+      "logical_failure_probability_union_depth_proxy": 0.091492043404133,
+      "logical_qubits_at_n": null,
+      "naive_serial_time_days": -0.09363475383857507
+    },
+    "code_distance_d": {
+      "approximate_data_plane_physical_qubits": 0.996700113749385,
+      "code_distance_d": 1.0,
+      "ecdlp_toffoli_gates_upper_bound": null,
+      "logical_failure_probability_union_depth_proxy": 0.08999220674874853,
+      "logical_qubits_at_n": null,
+      "naive_serial_time_days": -0.09103265768056053
+    },
+    "ecdlp_toffoli_gates_upper_bound": {
+      "approximate_data_plane_physical_qubits": null,
+      "code_distance_d": null,
+      "ecdlp_toffoli_gates_upper_bound": 1.0,
+      "logical_failure_probability_union_depth_proxy": null,
+      "logical_qubits_at_n": null,
+      "naive_serial_time_days": null
+    },
+    "logical_failure_probability_union_depth_proxy": {
+      "approximate_data_plane_physical_qubits": 0.091492043404133,
+      "code_distance_d": 0.08999220674874853,
+      "ecdlp_toffoli_gates_upper_bound": null,
+      "logical_failure_probability_union_depth_proxy": 1.0,
+      "logical_qubits_at_n": null,
+      "naive_serial_time_days": 0.000765553783825734
+    },
+    "logical_qubits_at_n": {
+      "approximate_data_plane_physical_qubits": null,
+      "code_distance_d": null,
+      "ecdlp_toffoli_gates_upper_bound": null,
+      "logical_failure_probability_union_depth_proxy": null,
+      "logical_qubits_at_n": 1.0,
+      "naive_serial_time_days": null
+    },
+    "naive_serial_time_days": {
+      "approximate_data_plane_physical_qubits": -0.09363475383857507,
+      "code_distance_d": -0.09103265768056053,
+      "ecdlp_toffoli_gates_upper_bound": null,
+      "logical_failure_probability_union_depth_proxy": 0.000765553783825734,
+      "logical_qubits_at_n": null,
+      "naive_serial_time_days": 1.0
+    }
+  }
+}

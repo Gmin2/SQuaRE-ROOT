@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from square.yaml_numeric import (
+    read_evaluated_abstract_measurement_depth_layers,
     read_modality_characteristic_gate_error,
     read_parameter_entry_float,
     read_qcvv_characterization_error_multiplier,
@@ -98,16 +99,11 @@ def build_system_metrics_block(
         )
 
     p_l = logical_fault_model.get("logical_error_rate_per_cycle")
-    depth_entry = evaluated.get("abstract_measurement_depth_layers")
-    d_layers: float | None = None
-    if isinstance(depth_entry, dict) and depth_entry.get("value") is not None:
-        try:
-            d_layers = float(depth_entry["value"])
-        except (TypeError, ValueError):
-            warnings.append(
-                "system_metrics: abstract_measurement_depth_layers.value not numeric; headroom omitted."
-            )
-            d_layers = None
+    d_layers = read_evaluated_abstract_measurement_depth_layers(
+        evaluated,
+        warnings,
+        context="system_metrics",
+    )
 
     s_qem = 1.0
     if qem_doc is not None:
