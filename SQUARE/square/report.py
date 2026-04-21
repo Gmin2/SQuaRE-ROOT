@@ -33,18 +33,21 @@ from square.report_layers import build_report_sources_and_layers
 from square.report_markdown import report_to_markdown
 from square.report_physical_layout import build_physical_rollup_and_layout_estimate
 from square.report_qec_patch import evaluate_patch_physical_per_logical
-from square.report_system_metrics import build_system_metrics_block
+from square.report_system_metrics import (
+    VER_USES_HEADLINE_CHARACTERISTIC_FOR_VER,
+    build_system_metrics_block,
+)
 from square.report_timing import build_timing_section
 from square.yaml_numeric import (
     read_evaluated_metric_float,
     read_modality_characteristic_gate_error,
     read_modality_nominal_gate_error_for_heuristic,
-    read_parameter_entry_float,
     read_parameter_entry_float_default,
     read_positive_parameter_microseconds,
+    read_qcvv_characterization_error_multiplier,
 )
 
-_REPORT_CONTRACT_VERSION = 12
+_REPORT_CONTRACT_VERSION = 15
 REPORT_CONTRACT_VERSION = _REPORT_CONTRACT_VERSION
 
 # Curated modality keys surfaced under top-level ``physical_layer`` (OSRE native physical layer).
@@ -61,6 +64,27 @@ OSRE_EXTENDED_PHYSICAL_PARAMETER_KEYS: frozenset[str] = frozenset(
     }
 )
 
+# Optional OSRE memo-aligned transparency slots (scaling / variability). **Not** fed into heuristic
+# ``p_effective`` or distance in this engine version; see ``physical_layer.notes`` on each report.
+OSRE_OPTIONAL_PHYSICAL_RICHNESS_KEYS: frozenset[str] = frozenset(
+    {
+        "fabrication_variability_proxy",
+        "thermal_load_index_proxy",
+        "control_plane_saturation_proxy",
+    }
+)
+
+OSRE_PHYSICAL_LAYER_SNAPSHOT_KEYS: frozenset[str] = frozenset().union(
+    OSRE_EXTENDED_PHYSICAL_PARAMETER_KEYS,
+    OSRE_OPTIONAL_PHYSICAL_RICHNESS_KEYS,
+)
+
+_PHYSICAL_LAYER_TRANSPARENCY_NOTES: tuple[str, ...] = (
+    "Optional richness keys (fabrication_variability_proxy, thermal_load_index_proxy, "
+    "control_plane_saturation_proxy) are surfaced for OSRE transparency when present in modality YAML; "
+    "they do not enter heuristic p_effective, union-bound distance, or logical_fault_model in this version.",
+)
+
 
 def _build_physical_layer_snapshot(
     modality_parameters: Mapping[str, Any],
@@ -74,7 +98,7 @@ def _build_physical_layer_snapshot(
     OSRE-aligned keys for tooling. See ``docs/output-contract.md`` § ``physical_layer``.
     """
     picked: dict[str, Any] = {}
-    for key in OSRE_EXTENDED_PHYSICAL_PARAMETER_KEYS:
+    for key in OSRE_PHYSICAL_LAYER_SNAPSHOT_KEYS:
         entry = modality_parameters.get(key)
         if isinstance(entry, dict):
             picked[key] = entry
@@ -89,6 +113,7 @@ def _build_physical_layer_snapshot(
         "schema": "physical_layer_v1",
         "document_id": doc_id,
         "status": status,
+        "notes": list(_PHYSICAL_LAYER_TRANSPARENCY_NOTES),
         "parameter_keys": sorted(picked.keys()),
         "parameters": picked,
     }
@@ -140,17 +165,11 @@ def _effective_physical_gate_error_stack(
         modality, warnings, context="paths.modality"
     )
     sigma = 1.0
-    if qcvv_doc is not None:
-        s_opt = read_parameter_entry_float(
-            qcvv_doc,
-            "effective_physical_error_rate_multiplier_from_characterization",
-            warnings,
-            context="paths.qcvv",
-        )
-        if s_opt is not None and s_opt > 0.0:
-            sigma = float(s_opt)
-        elif s_opt is not None:
-            warnings.append("effective_physical_error_rate_multiplier_from_characterization <= 0; using 1.0.")
+    s_opt = read_qcvv_characterization_error_multiplier(qcvv_doc, warnings, context="paths.qcvv")
+    if s_opt is not None and s_opt > 0.0:
+        sigma = float(s_opt)
+    elif s_opt is not None:
+        warnings.append("effective_physical_error_rate_multiplier_from_characterization <= 0; using 1.0.")
 
     alpha = read_parameter_entry_float_default(
         qec.get("heuristic_scaling_penalty_log_coefficient"),
@@ -192,10 +211,6 @@ def _effective_physical_gate_error_stack(
         "scaling_penalty_factor": penalty,
         "p_effective": p_effective,
     }
-
-
-def _scenario_public_dict(scenario: Mapping[str, Any]) -> dict[str, Any]:
-    return dict(scenario)
 
 
 def _algorithm_metrics_block(
@@ -422,8 +437,7 @@ def _build_logical_fault_model_block(
             if key in physical_error_stack:
                 inputs[key] = physical_error_stack[key]
 
-    # VER (system_metrics) still multiplies QCVV σ by headline characteristic only, not ``p_nominal``.
-    inputs["ver_grounded_on_characteristic_only"] = True
+    inputs["ver_grounded_on_characteristic_only"] = VER_USES_HEADLINE_CHARACTERISTIC_FOR_VER
 
     return {
         "schema": "logical_fault_model_v1",
@@ -631,8 +645,11 @@ def build_scenario_report(
     :param bundle: Loaded scenario documents.
     :param modulus_bits_override: If set, use this ``n`` instead of ``target.modulus_bit_length``.
     :param code_distance_override: If set, use this QEC distance ``d`` instead of scenario fields.
-    :param outputs: ``full`` (default) contract report; ``mc_metrics`` returns only keys required by
-        :func:`square.mc.forward_model.extract_default_mc_metrics` (cheaper for Monte Carlo draws).
+    :param outputs: ``full`` (default) contract report. ``mc_metrics`` returns only ``dashboard`` and
+        ``algorithm_metrics`` (as required by :func:`square.mc.forward_model.extract_default_mc_metrics`) and
+        skips ``layout_optimization``, ``logical_fault_model``, ``system_metrics``, ``parameter_sensitivity``,
+        and the assembled sources/layers shell — but still runs formula evaluation, distance resolution,
+        patch/rollup, timing, and dashboard construction on each call.
     """
     warnings: list[str] = []
     scenario = bundle.scenario
@@ -789,6 +806,15 @@ def build_scenario_report(
         ecdlp_block=ecdlp_block_for_metrics,
     )
 
+    lfm = _build_logical_fault_model_block(
+        distance_d=d_resolved,
+        modality=bundle.modality,
+        qec=bundle.qec,
+        warnings=warnings,
+        physical_gate_error_rate_effective=p_effective_for_heuristic,
+        physical_error_stack=physical_stack,
+    )
+
     dashboard = build_dashboard_fields(
         ccz_count=ccz_count,
         factory_param_key=factory_param_key,
@@ -815,19 +841,13 @@ def build_scenario_report(
         schedule_model_v1=schedule_model_v1,
         schedule_calibration=schedule_calibration,
         ecdlp_block_for_metrics=ecdlp_block_for_metrics,
+        logical_fault_model=lfm,
+        warnings=warnings,
+        magic=bundle.magic,
     )
 
     if outputs == "mc_metrics":
         return {"dashboard": dashboard, "algorithm_metrics": algo_metrics}
-
-    lfm = _build_logical_fault_model_block(
-        distance_d=d_resolved,
-        modality=bundle.modality,
-        qec=bundle.qec,
-        warnings=warnings,
-        physical_gate_error_rate_effective=p_effective_for_heuristic,
-        physical_error_stack=physical_stack,
-    )
     system_metrics_block = build_system_metrics_block(
         scenario=scenario,
         modality=bundle.modality,
@@ -868,7 +888,7 @@ def build_scenario_report(
     return assemble_report_shell(
         report_contract_version=_REPORT_CONTRACT_VERSION,
         warnings=warnings,
-        scenario=_scenario_public_dict(scenario),
+        scenario=dict(scenario),
         target=dict(target) if isinstance(target, dict) else {},
         table2_reference=table2_block if isinstance(table2_block, dict) else None,
         sources=sl.sources,
@@ -891,4 +911,10 @@ def build_scenario_report(
     )
 
 
-__all__ = ["REPORT_CONTRACT_VERSION", "build_scenario_report", "report_to_markdown"]
+__all__ = [
+    "OSRE_EXTENDED_PHYSICAL_PARAMETER_KEYS",
+    "OSRE_OPTIONAL_PHYSICAL_RICHNESS_KEYS",
+    "REPORT_CONTRACT_VERSION",
+    "build_scenario_report",
+    "report_to_markdown",
+]

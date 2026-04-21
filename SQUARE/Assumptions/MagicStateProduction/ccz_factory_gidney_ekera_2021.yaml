@@ -21,6 +21,20 @@ primary_non_clifford_mechanism:
   section: "Table 2"
   layer: magic
 
+# Optional OSRE-style throughput proxy: abstract logical-depth equivalents per second per CCZ factory.
+# Used only for dashboard.magic_supply_adequate / magic_limited_runtime_multiplier (does not alter timing blocks).
+ccz_factory_supply_abstract_measurement_depth_layers_per_second_per_factory:
+  value: 120000
+  unit: "abstract_measurement_depth_layers_per_second_per_factory"
+  confidence: speculative
+  source: >-
+    Calibrated so Table-2 RSA-2048 parallel scenarios (28 CCZ, ~0.31 d wall) clear demand vs N_ccz×R under
+    the same depth and schedule_model_v1 wall-clock proxies as the report; replace with extracted factory
+    throughput when available.
+  date: "2026-04-20"
+  section: "SQuaRE dashboard proxy"
+  layer: magic
+
 # One structured list replaces flat ccz_factory_count_* and rsa_2048_reported_* triplets.
 paper_table2_rsa2048_reference_rows:
   value:

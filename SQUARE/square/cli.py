@@ -78,14 +78,14 @@ def main(argv: list[str] | None = None) -> int:
             modulus_bits_override=args.n,
             code_distance_override=args.d,
         )
-    except (KeyError, TypeError, ValueError) as exc:
+    except (TypeError, ValueError) as exc:
         print(f"square-report: cannot build report: {exc}", file=sys.stderr)
         return 1
 
     if args.markdown:
         try:
             sys.stdout.write(report_to_markdown(report))
-        except (AttributeError, BrokenPipeError, KeyError, OSError, TypeError, ValueError) as exc:
+        except (AttributeError, BrokenPipeError, OSError, TypeError, ValueError) as exc:
             print(f"square-report: cannot render Markdown: {exc}", file=sys.stderr)
             return 1
     else:

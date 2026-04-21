@@ -40,6 +40,28 @@ def read_parameter_entry_float(
         return None
 
 
+def read_qcvv_characterization_error_multiplier(
+    qcvv_doc: Mapping[str, Any] | None,
+    warnings: list[str],
+    *,
+    context: str = "paths.qcvv",
+) -> float | None:
+    """
+    Raw QCVV ``effective_physical_error_rate_multiplier_from_characterization`` when present and parseable.
+
+    Returns ``None`` when ``qcvv_doc`` is ``None``, the key is absent, or ``value`` is not coercible to float.
+    Callers decide how to treat ``None`` (e.g. heuristic stack defaults σ to ``1.0``; VER may omit).
+    """
+    if qcvv_doc is None:
+        return None
+    return read_parameter_entry_float(
+        qcvv_doc,
+        "effective_physical_error_rate_multiplier_from_characterization",
+        warnings,
+        context=context,
+    )
+
+
 def read_modality_characteristic_gate_error(
     modality: Mapping[str, Any],
     warnings: list[str],

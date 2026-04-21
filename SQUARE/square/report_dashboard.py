@@ -5,6 +5,55 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from square.report_magic_throughput import compute_magic_throughput_dashboard_fields
+
+
+def compute_logical_failure_probability_union_depth_proxy(
+    *,
+    logical_fault_model: Mapping[str, Any],
+    evaluated: Mapping[str, Any],
+    warnings: list[str],
+) -> float | None:
+    """
+    Conservative union-style logical failure proxy ``min(1, D × p_L)``.
+
+    ``D`` is ``algorithm_metrics.evaluated.abstract_measurement_depth_layers.value`` (logical depth proxy).
+    ``p_L`` is ``logical_fault_model.logical_error_rate_per_cycle`` (phenomenological per-cycle rate).
+
+    This is **not** a calibrated fault path or decoder simulation; omit when inputs are missing or ``p_L``
+    is absent (e.g. ``p_phys ≥ p_th``).
+    """
+    p_l_raw = logical_fault_model.get("logical_error_rate_per_cycle")
+    if p_l_raw is None or not isinstance(p_l_raw, (int, float)):
+        warnings.append(
+            "dashboard.logical_failure_probability_union_depth_proxy omitted: need numeric "
+            "logical_fault_model.logical_error_rate_per_cycle (phenomenological p_L)."
+        )
+        return None
+    p_l = float(p_l_raw)
+    if p_l <= 0.0:
+        warnings.append(
+            "dashboard.logical_failure_probability_union_depth_proxy omitted: "
+            "logical_fault_model.logical_error_rate_per_cycle must be > 0."
+        )
+        return None
+
+    depth_entry = evaluated.get("abstract_measurement_depth_layers")
+    d_layers: float | None = None
+    if isinstance(depth_entry, dict) and depth_entry.get("value") is not None:
+        try:
+            d_layers = float(depth_entry["value"])
+        except (TypeError, ValueError):
+            d_layers = None
+    if d_layers is None or d_layers < 0.0:
+        warnings.append(
+            "dashboard.logical_failure_probability_union_depth_proxy omitted: need non-negative numeric "
+            "algorithm_metrics.evaluated.abstract_measurement_depth_layers.value (depth proxy D)."
+        )
+        return None
+
+    return min(1.0, d_layers * p_l)
+
 
 def _ecdlp_dashboard_extras(ecdlp_block: dict[str, Any] | None) -> dict[str, Any]:
     if ecdlp_block is None:
@@ -46,12 +95,34 @@ def build_dashboard_fields(
     schedule_model_v1: Mapping[str, Any] | None,
     schedule_calibration: Mapping[str, Any] | None,
     ecdlp_block_for_metrics: dict[str, Any] | None,
+    logical_fault_model: Mapping[str, Any],
+    warnings: list[str],
+    magic: Mapping[str, Any],
 ) -> dict[str, Any]:
     """
     Assemble the ``dashboard`` object from already-derived report scalars.
 
     ECDLP-specific keys are merged from ``ecdlp_block_for_metrics`` when present.
+
+    ``logical_failure_probability_union_depth_proxy`` uses the same ``p_L`` and depth proxy as OSRE-style
+    notes; see :func:`compute_logical_failure_probability_union_depth_proxy`.
+
+    ``magic_supply_adequate`` / ``magic_limited_runtime_multiplier`` come from
+    :func:`square.report_magic_throughput.compute_magic_throughput_dashboard_fields`.
     """
+    fail_p = compute_logical_failure_probability_union_depth_proxy(
+        logical_fault_model=logical_fault_model,
+        evaluated=evaluated,
+        warnings=warnings,
+    )
+    magic_tp = compute_magic_throughput_dashboard_fields(
+        magic=magic,
+        ccz_factory_count=ccz_count,
+        evaluated=evaluated,
+        schedule_model_v1=schedule_model_v1,
+        naive_serial_timing=naive_serial_timing,
+        warnings=warnings,
+    )
     base: dict[str, Any] = {
         "ccz_factory_count": ccz_count,
         "ccz_factory_parameter_key": factory_param_key,
@@ -85,6 +156,8 @@ def build_dashboard_fields(
         "schedule_calibration_ratio_table2_over_model_v1": schedule_calibration.get("ratio_table2_pinned_over_model_v1")
         if schedule_calibration
         else None,
+        "logical_failure_probability_union_depth_proxy": fail_p,
     }
+    base.update(magic_tp)
     base.update(_ecdlp_dashboard_extras(ecdlp_block_for_metrics))
     return base

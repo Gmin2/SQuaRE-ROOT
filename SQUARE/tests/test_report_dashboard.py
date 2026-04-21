@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from square.report_dashboard import build_dashboard_fields
+import pytest
+from square.report_dashboard import (
+    build_dashboard_fields,
+    compute_logical_failure_probability_union_depth_proxy,
+)
 
 
 def test_build_dashboard_fields_includes_ecdlp_keys_when_block_present() -> None:
@@ -35,7 +39,44 @@ def test_build_dashboard_fields_includes_ecdlp_keys_when_block_present() -> None
             "variant": "low_toffoli_variant",
             "toffoli_gates_upper_bound": 1e6,
         },
+        logical_fault_model={"logical_error_rate_per_cycle": None},
+        warnings=[],
+        magic={},
     )
     assert dash["ecdlp_active"] is True
     assert dash["ecdlp_variant"] == "low_toffoli_variant"
     assert dash["ecdlp_toffoli_gates_upper_bound"] == 1e6
+    assert dash.get("magic_supply_adequate") is None
+    assert dash.get("magic_limited_runtime_multiplier") is None
+
+
+def test_compute_logical_failure_probability_union_depth_proxy() -> None:
+    w: list[str] = []
+    v = compute_logical_failure_probability_union_depth_proxy(
+        logical_fault_model={"logical_error_rate_per_cycle": 1e-6},
+        evaluated={"abstract_measurement_depth_layers": {"value": 2e6}},
+        warnings=w,
+    )
+    assert v == pytest.approx(min(1.0, 2.0))
+    assert not w
+
+    w2: list[str] = []
+    v2 = compute_logical_failure_probability_union_depth_proxy(
+        logical_fault_model={"logical_error_rate_per_cycle": 1e-6},
+        evaluated={"abstract_measurement_depth_layers": {"value": 2e9}},
+        warnings=w2,
+    )
+    assert v2 == 1.0
+
+
+def test_compute_logical_failure_probability_omitted_without_p_l() -> None:
+    w: list[str] = []
+    assert (
+        compute_logical_failure_probability_union_depth_proxy(
+            logical_fault_model={"logical_error_rate_per_cycle": None},
+            evaluated={"abstract_measurement_depth_layers": {"value": 100.0}},
+            warnings=w,
+        )
+        is None
+    )
+    assert w

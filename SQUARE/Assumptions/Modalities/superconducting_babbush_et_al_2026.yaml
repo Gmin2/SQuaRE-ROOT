@@ -134,3 +134,30 @@ leakage_error_rate:
   date: "2026-04-15"
   section: "SQuaRE OSRE extension"
   layer: physical
+
+fabrication_variability_proxy:
+  value: 0.0
+  unit: "dimensionless_order_one"
+  confidence: speculative
+  source: "Placeholder OSRE variability slot; refine when wiring fabrication spread"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+thermal_load_index_proxy:
+  value: 0.0
+  unit: "dimensionless_order_one"
+  confidence: speculative
+  source: "Placeholder OSRE thermal index; refine from cryo / duty-cycle model"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+control_plane_saturation_proxy:
+  value: 0.0
+  unit: "dimensionless_order_one"
+  confidence: speculative
+  source: "Placeholder OSRE control saturation slot; refine from wiring budget"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical

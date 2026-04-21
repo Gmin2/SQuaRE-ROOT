@@ -11,7 +11,7 @@ This document defines the **machine-readable report** produced after loading a s
 
 ## Internal: Monte Carlo metrics slice (`outputs="mc_metrics"`)
 
-Monte Carlo (`square-mc`) calls `build_scenario_report(..., outputs="mc_metrics")` when it only needs default forward-model metrics. That path returns a **non-contract** object containing exactly:
+Monte Carlo (`square-mc`) calls `build_scenario_report(..., outputs="mc_metrics")` when it only needs default forward-model metrics. The implementation still runs formula evaluation, distance resolution, patch/rollup, timing, and dashboard assembly for each evaluation; the slice only **drops** later sections from the returned dict. That path returns a **non-contract** object containing exactly:
 
 | Key | Purpose |
 |-----|---------|
@@ -26,7 +26,7 @@ Every report is a JSON-serializable object with at least:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `report_contract_version` | `number` | Contract version (currently `12`). |
+| `report_contract_version` | `number` | Contract version (currently `15`). |
 | `engine` | `object` | `{ "name": "square", "version": "<package version>" }`. |
 | `generated_at` | `string` | ISO-8601 UTC timestamp when the report was built. |
 | `warnings` | `array` | Human-readable strings for caveats (missing distance `d`, symbolic formulas, branch flags). |
@@ -115,12 +115,15 @@ Headline fields (all optional / nullable):
 | `rsa_2048_reported_wall_clock_days_key` | Same logical ref as physical qubits key when wall-clock days are present. |
 | `reported_rsa2048_wall_clock_days` | `wall_clock_days` field from the matched Table 2 row. |
 | `naive_serial_time_days_from_depth_times_cycle` | `abstract_measurement_depth_layers × surface_code_cycle_time` (µs) converted to days; `null` if inputs missing. **Not** the paper’s scheduled wall time. |
+| `logical_failure_probability_union_depth_proxy` | `min(1, D × p_L)` when ``D`` = evaluated ``abstract_measurement_depth_layers.value`` and ``p_L`` = ``logical_fault_model.logical_error_rate_per_cycle`` (phenomenological). Union-style **proxy** for cumulative logical failure risk; `null` if either input is missing or ``p_L`` is omitted (e.g. ``p_phys ≥ p_th``). Not a decoder-accurate fault simulation. |
 | `code_distance_d` | Resolved distance used for patch evaluation (mirror of `qec_overhead...distance_d`). |
 | `qec_distance_resolution_mode` | Short string from `qec_distance_resolution.mode`. |
 | `derived_non_data_overhead_physical_qubits` | When Table 2 total qubits and data-plane proxy exist: `reported_total − approximate_data_plane` (remainder lumped: factories, routing, etc.). |
 | `factory_footprint_physical_qubits_from_yaml` | `ccz_factory_count × physical_qubits_per_ccz_factory_approximate` when the magic YAML parameter is present. |
 | `schedule_model_v1_wall_clock_days` | Heuristic parallel-depth schedule (see `timing.schedule_model_v1`). |
 | `schedule_calibration_ratio_table2_over_model_v1` | Pinned Table 2 wall-clock divided by `schedule_model_v1` days when both exist (highlights model mismatch). |
+| `magic_supply_adequate` | `true` / `false` / `null`. When magic YAML supplies `ccz_factory_supply_abstract_measurement_depth_layers_per_second_per_factory` and timing + CCZ width exist: compares demand proxy `D/T` (evaluated depth over wall-clock seconds from `timing.schedule_model_v1.wall_clock_days` if present, else `timing.naive_serial_from_measurement_depth.serial_time_days`) to supply proxy `N_ccz × R` (`N_ccz` from Table-2-inferred count or `schedule_model_v1.ccz_factory_count`). `null` when skipped (missing inputs or absent rate); see `warnings`. |
+| `magic_limited_runtime_multiplier` | `number` / `null`. When the check runs and supply is below demand: `min(1e6, demand/supply)` (notional wall-clock scale vs this proxy); `1.0` when adequate; `null` when the check is skipped. Does **not** rewrite `timing` blocks. |
 | `ecdlp_active` | `true` when the scenario uses an ECDLP algorithm profile; otherwise omitted. |
 | `ecdlp_variant` | Named envelope key (e.g. `low_toffoli_variant`) when ECDLP mode is active. |
 | `ecdlp_toffoli_gates_upper_bound` | Upper bound from the algorithm YAML envelope when ECDLP mode is active. |
@@ -209,17 +212,20 @@ Phenomenological **logical error rate per QEC cycle** and a **logical cycle time
 
 ## `physical_layer` (OSRE native physical)
 
-Curated passthrough of **extended** modality parameters (T1/T2, native gate and readout errors, idle proxy, correlated-noise multiplier, leakage proxy) that follow the OSRE memo’s physical-layer checklist. Only keys listed below are copied from `layers.modality.parameters`; the full modality map remains authoritative.
+Curated passthrough of **extended** modality parameters (T1/T2, native gate and readout errors, idle proxy, correlated-noise multiplier, leakage proxy, plus optional memo-aligned richness slots) that follow the OSRE memo’s physical-layer checklist. Only keys listed below are copied from `layers.modality.parameters`; the full modality map remains authoritative.
 
 | Key | Type | Description |
 |-----|------|-------------|
 | `schema` | `string` | Sub-schema tag (currently `physical_layer_v1`). |
 | `document_id` | `string \| null` | Modality `document_id` for traceability. |
 | `status` | `string` | `passthrough_from_modality` when at least one extended key is present; otherwise `no_extended_keys_in_profile`. |
+| `notes` | `array` of `string` | Fixed transparency strings (e.g. optional richness keys are **not** used in heuristic `p_effective` / distance in this version). |
 | `parameter_keys` | `array` | Sorted list of keys included in `parameters`. |
 | `parameters` | `object` | Map of parameter name → full YAML `parameter_entry` (same shape as under `layers.modality.parameters`). |
 
-**Canonical key set** (when present in modality YAML): `coherence_time_t1_microseconds`, `coherence_time_t2_microseconds`, `single_qubit_gate_error_rate`, `two_qubit_gate_error_rate`, `measurement_error_rate`, `idle_error_rate_per_cycle`, `correlated_noise_parameter`, `leakage_error_rate`.
+**Canonical key set** (required in bundled modality YAML; when present they are copied): `coherence_time_t1_microseconds`, `coherence_time_t2_microseconds`, `single_qubit_gate_error_rate`, `two_qubit_gate_error_rate`, `measurement_error_rate`, `idle_error_rate_per_cycle`, `correlated_noise_parameter`, `leakage_error_rate`.
+
+**Optional richness key set** (copied when present; transparency / future modeling only in v14): `fabrication_variability_proxy`, `thermal_load_index_proxy`, `control_plane_saturation_proxy`.
 
 ## `system_metrics` (OSRE-aligned)
 
@@ -310,3 +316,6 @@ Evaluable formula strings follow **Python** syntax for powers (`**`, not `^`).
 | `10` | **Effective physical error stack** (QCVV × optional QEC scaling penalty on ``N``) drives heuristic ``d``, `logical_fault_model`, and `layout_optimization`; **LOB** includes QEM ``s`` on ``p_L``; **mitigated_operations_ceiling** = LOB/Γ; top-level **`parameter_sensitivity`** (finite differences); optional `qec.emit_parameter_sensitivity: false` to skip. |
 | `11` | **Modality nominal gate proxy for heuristics:** ``p_nominal`` = ``max(single_qubit_gate_error_rate, two_qubit_gate_error_rate)`` when both OSRE extended rates are usable; else a single extended rate with a warning; else ``characteristic_physical_gate_error_rate`` with a fallback warning. ``p_effective = p_nominal × σ × (penalty)`` unchanged. ``logical_fault_model.inputs`` gains ``p_nominal``, ``p_nominal_gate_proxy_method``, and ``characteristic_physical_gate_error_rate`` from the stack. **VER** still uses headline characteristic × σ. |
 | `12` | **Shorter proxy method IDs** (`max_1q_2q`, `single_1q_only`, `two_2q_only`, `characteristic_fallback`). Adds ``ver_grounded_on_characteristic_only: true`` under ``logical_fault_model.inputs``. **Monte Carlo** ``PARAMETER_LAYERS`` includes ``single_qubit_gate_error_rate`` and ``two_qubit_gate_error_rate`` so ``square-mc`` can vary the same rates the heuristic uses for ``p_nominal``. |
+| `13` | **Dashboard** adds ``logical_failure_probability_union_depth_proxy`` = ``min(1, D×p_L)`` (depth proxy × phenomenological ``p_L``). **Monte Carlo** default metric slice includes this key when present. |
+| `14` | **``physical_layer``** adds fixed ``notes`` and passthrough of optional OSRE richness keys (``fabrication_variability_proxy``, ``thermal_load_index_proxy``, ``control_plane_saturation_proxy``) when present in modality YAML; they do **not** feed heuristic ``p_effective`` or distance in this version. |
+| `15` | **Dashboard** adds optional magic throughput proxies: ``magic_supply_adequate`` and ``magic_limited_runtime_multiplier`` when magic YAML includes ``ccz_factory_supply_abstract_measurement_depth_layers_per_second_per_factory`` and CCZ width + honest timing exist; otherwise ``null`` with explanatory ``warnings``. **Monte Carlo** default metric slice includes ``magic_limited_runtime_multiplier`` when present. |

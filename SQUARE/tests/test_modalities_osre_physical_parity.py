@@ -11,7 +11,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from square.loader import _load_yaml, find_square_root
-from square.report import OSRE_EXTENDED_PHYSICAL_PARAMETER_KEYS
+from square.report import (
+    OSRE_EXTENDED_PHYSICAL_PARAMETER_KEYS,
+    OSRE_OPTIONAL_PHYSICAL_RICHNESS_KEYS,
+)
 from square.yaml_assumption import is_parameter_entry
 
 
@@ -39,3 +42,19 @@ def test_every_modality_yaml_includes_osre_extended_physical_keys() -> None:
                 assert field in entry and entry[field] is not None, (
                     f"{path.name}:{key}: parameter_entry must include non-null {field!r} per Schemas.yaml"
                 )
+
+
+def test_optional_osre_richness_keys_disjoint_from_canonical_eight() -> None:
+    assert not (OSRE_EXTENDED_PHYSICAL_PARAMETER_KEYS & OSRE_OPTIONAL_PHYSICAL_RICHNESS_KEYS)
+
+
+def test_every_modality_yaml_includes_optional_osre_richness_keys() -> None:
+    """Bundled profiles ship optional transparency slots (see Assumptions/Modalities/README.md)."""
+    root = find_square_root()
+    for path in _modality_yaml_paths(root):
+        doc = _load_yaml(path)
+        missing = sorted(k for k in OSRE_OPTIONAL_PHYSICAL_RICHNESS_KEYS if k not in doc)
+        assert not missing, f"{path.relative_to(root)}: missing optional richness keys: {missing}"
+        for key in OSRE_OPTIONAL_PHYSICAL_RICHNESS_KEYS:
+            entry = doc[key]
+            assert is_parameter_entry(entry), f"{path.name}:{key}: expected parameter_entry"

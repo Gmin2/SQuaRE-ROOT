@@ -50,6 +50,10 @@ def report_to_markdown(report: Mapping[str, Any]) -> str:
         f"- **Naive serial time (depth × surface cycle, not Table 2 wall-clock):** "
         f"{dash.get('naive_serial_time_days_from_depth_times_cycle')} days\n"
     )
+    lines.append(
+        f"- **Logical failure proxy (min(1, D×p_L), union-style):** "
+        f"{dash.get('logical_failure_probability_union_depth_proxy')}\n"
+    )
     lines.append(f"- **Code distance d (resolved):** {dash.get('code_distance_d')} (`{dash.get('qec_distance_resolution_mode')}`)\n")
     lines.append(f"- **Physical qubits / logical (at d):** {dash.get('logical_qubit_physical_qubits_if_distance_d')}\n")
     lines.append(f"- **Approx. data-plane physical qubits (logical × patch):** {dash.get('approximate_data_plane_physical_qubits')}\n")
@@ -63,10 +67,17 @@ def report_to_markdown(report: Mapping[str, Any]) -> str:
     lines.append(
         f"- **Table2 / schedule_model_v1 ratio:** {dash.get('schedule_calibration_ratio_table2_over_model_v1')}\n"
     )
+    lines.append(
+        f"- **Magic supply adequate (proxy):** {dash.get('magic_supply_adequate')} · "
+        f"**magic-limited runtime multiplier:** {dash.get('magic_limited_runtime_multiplier')}\n"
+    )
     lines.append(f"- **T-factory fallback flagged:** {dash.get('t_factory_fallback_recommended')}\n")
 
     phys_layer = report.get("physical_layer") or {}
     lines.append("\n## Physical layer (OSRE snapshot)\n")
+    pn = phys_layer.get("notes") or []
+    if pn:
+        lines.append(f"- **Notes:** {' '.join(str(x) for x in pn)}\n")
     lines.append(
         f"- **Status:** `{phys_layer.get('status')}` · **document_id** `{phys_layer.get('document_id')}` · "
         f"**extended keys** {phys_layer.get('parameter_keys')}\n"

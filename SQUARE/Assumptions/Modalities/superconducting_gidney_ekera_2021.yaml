@@ -134,3 +134,31 @@ leakage_error_rate:
   date: "2026-04-15"
   section: "SQuaRE OSRE extension"
   layer: physical
+
+# --- Optional OSRE richness (transparency only; not used in heuristic p_effective in engine v14) ---
+fabrication_variability_proxy:
+  value: 0.0
+  unit: "dimensionless_order_one"
+  confidence: speculative
+  source: "Placeholder 0 = no extra fabrication spread; OSRE memo variability slot"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+thermal_load_index_proxy:
+  value: 0.0
+  unit: "dimensionless_order_one"
+  confidence: speculative
+  source: "Placeholder 0 = no thermal headroom penalty in this headline row"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+control_plane_saturation_proxy:
+  value: 0.0
+  unit: "dimensionless_order_one"
+  confidence: speculative
+  source: "Placeholder 0 = no control-plane saturation term in this profile"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical

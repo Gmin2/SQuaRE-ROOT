@@ -15,6 +15,8 @@ from square.report import (
     build_scenario_report,
     report_to_markdown,
 )
+from square.report_system_metrics import VER_USES_HEADLINE_CHARACTERISTIC_FOR_VER
+from square.yaml_numeric import read_qcvv_characterization_error_multiplier
 
 
 def test_eval_numeric_formula_golden() -> None:
@@ -37,11 +39,13 @@ def test_build_report_rsa2048_parallel() -> None:
     pl = report["physical_layer"]
     assert pl["status"] == "passthrough_from_modality"
     assert pl["document_id"] == "superconducting_gidney_ekera_2021"
-    assert len(pl["parameter_keys"]) == 8
+    assert len(pl["parameter_keys"]) == 11
+    assert "fabrication_variability_proxy" in pl["parameters"]
+    assert isinstance(pl.get("notes"), list) and pl["notes"]
     assert pl["parameters"]["coherence_time_t1_microseconds"]["value"] == 80.0
     lf = report["logical_fault_model"]
     assert lf["inputs"]["p_nominal_gate_proxy_method"] == "max_1q_2q"
-    assert lf["inputs"]["ver_grounded_on_characteristic_only"] is True
+    assert lf["inputs"]["ver_grounded_on_characteristic_only"] is VER_USES_HEADLINE_CHARACTERISTIC_FOR_VER
     assert lf["inputs"]["p_nominal"] == pytest.approx(0.001)
     assert lf["status"] == "computed"
     assert lf["exponent_half_distance"] == 13
@@ -90,10 +94,15 @@ def test_build_report_rsa2048_parallel() -> None:
 
     depth_layers = 500 * 2048**2 + 2048**2 * math.log2(2048)
     p_l_rsa = lf["logical_error_rate_per_cycle"]
+    assert dash["logical_failure_probability_union_depth_proxy"] == pytest.approx(
+        min(1.0, float(depth_layers) * float(p_l_rsa))
+    )
     assert sm["logical_operations_budget_lob"] == pytest.approx(0.1 / float(p_l_rsa))
     assert sm["headroom_logical_depth"] == pytest.approx(0.1 / float(p_l_rsa) - depth_layers)
     expected_naive_days = depth_layers * 1.0 / 1e6 / 86400.0
     assert dash["naive_serial_time_days_from_depth_times_cycle"] == pytest.approx(expected_naive_days)
+    assert dash["magic_supply_adequate"] is True
+    assert dash["magic_limited_runtime_multiplier"] == pytest.approx(1.0)
 
     timing = report["timing"]
     assert timing["reported_table2_pinned"]["ccz_factory_count"] == 28
@@ -135,12 +144,15 @@ def test_build_report_rsa2048_parallel() -> None:
     json.dumps(report)
     md = report_to_markdown(report)
     assert "Physical layer (OSRE snapshot)" in md
+    assert "Notes:" in md
     assert "Logical fault model" in md
     assert "passthrough_from_modality" in md
     assert "System metrics (OSRE)" in md
     assert "`computed`" in md
     assert "system_metrics_v2" in md
     assert "Parameter sensitivity" in md
+    assert "Logical failure proxy" in md
+    assert "Magic supply adequate" in md
 
 
 def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
@@ -158,7 +170,7 @@ def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
     assert sm_ec["logical_qubit_capacity_lqc"] is None
     lfm = report["logical_fault_model"]
     assert lfm["status"] == "computed"
-    assert lfm["inputs"]["ver_grounded_on_characteristic_only"] is True
+    assert lfm["inputs"]["ver_grounded_on_characteristic_only"] is VER_USES_HEADLINE_CHARACTERISTIC_FOR_VER
     assert lfm["inputs"]["p_nominal_gate_proxy_method"] == "max_1q_2q"
     assert lfm["exponent_half_distance"] == 11
     assert lfm["logical_cycle_time"]["logical_cycle_time_microseconds"] == 10.0
@@ -189,6 +201,12 @@ def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
     assert dash["ecdlp_variant"] == "low_toffoli_variant"
     assert dash["ecdlp_toffoli_gates_upper_bound"] == 70_000_000
     assert dash["ecdlp_paper_headline_physical_qubits_upper_bound"] == 500_000
+    assert dash["logical_failure_probability_union_depth_proxy"] == pytest.approx(
+        min(1.0, 70_000_000.0 * float(p_l_ec))
+    )
+    assert dash.get("magic_supply_adequate") is None
+    assert dash.get("magic_limited_runtime_multiplier") is None
+    assert any("dashboard.magic_throughput" in str(x) for x in report["warnings"])
 
     assert report["qec_distance_resolution"]["mode"] == "heuristic_union_bound"
     assert report["qec_distance_resolution"]["distance_d"] == 21
@@ -422,3 +440,26 @@ def test_build_scenario_report_mc_metrics_slice_matches_full_for_mc_extract() ->
     full = build_scenario_report(bundle)
     slim = build_scenario_report(bundle, outputs="mc_metrics")
     assert extract_default_mc_metrics(full) == extract_default_mc_metrics(slim)
+
+
+def test_system_metrics_lob_note_distinguishes_p_l_from_ver() -> None:
+    """LOB copy must not imply validated_error_rate_ver drives phenomenological p_L."""
+    root = find_square_root()
+    report = build_scenario_report(
+        load_scenario_bundle(
+            root / "Configs" / "rsa2048_gidney_ekera_2021_parallel_qcvv_qem.yaml",
+            root=root,
+        )
+    )
+    notes = report["system_metrics"]["notes"]
+    lob_lines = [n for n in notes if n.startswith("LOB uses")]
+    assert len(lob_lines) == 1
+    assert "validated_error_rate_ver" in lob_lines[0]
+    assert "VER+scaling in p_L" not in lob_lines[0]
+
+
+def test_read_qcvv_characterization_error_multiplier() -> None:
+    w: list[str] = []
+    assert read_qcvv_characterization_error_multiplier(None, w) is None
+    doc = {"effective_physical_error_rate_multiplier_from_characterization": {"value": 1.2, "unit": "ratio"}}
+    assert read_qcvv_characterization_error_multiplier(doc, w, context="t") == pytest.approx(1.2)

@@ -28,6 +28,19 @@ def test_parameter_layers_nonempty() -> None:
     assert PARAMETER_LAYERS["two_qubit_gate_error_rate"] == "modality"
 
 
+def test_parameter_layers_covers_modality_gate_rates_for_heuristic_p_nominal() -> None:
+    """Monte Carlo must be able to perturb every modality key that feeds ``read_modality_nominal_gate_error_for_heuristic``."""
+    required = frozenset(
+        {
+            "characteristic_physical_gate_error_rate",
+            "single_qubit_gate_error_rate",
+            "two_qubit_gate_error_rate",
+        }
+    )
+    missing = sorted(k for k in required if k not in PARAMETER_LAYERS)
+    assert not missing, f"PARAMETER_LAYERS missing keys: {missing}"
+
+
 def test_apply_numeric_overrides_two_qubit_changes_p_nominal_in_report() -> None:
     root = find_square_root()
     bundle = load_scenario_bundle(

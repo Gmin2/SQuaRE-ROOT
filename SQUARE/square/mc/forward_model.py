@@ -16,6 +16,11 @@ MC_DASHBOARD_METRIC_FIELDS: tuple[tuple[str, str], ...] = (
     ("code_distance_d", "code_distance_d"),
     ("approximate_data_plane_physical_qubits", "approximate_data_plane_physical_qubits"),
     ("logical_qubits_at_n", "logical_qubits_at_n"),
+    (
+        "logical_failure_probability_union_depth_proxy",
+        "logical_failure_probability_union_depth_proxy",
+    ),
+    ("magic_limited_runtime_multiplier", "magic_limited_runtime_multiplier"),
 )
 
 MC_ECDLP_METRIC_KEY = "ecdlp_toffoli_gates_upper_bound"
@@ -63,9 +68,9 @@ def evaluate_forward_model(
     """
     Evaluate ``bundle`` with optional numeric overrides and return default MC metrics.
 
-    When ``include_full_report`` is False, only the subgraph needed for
-    :func:`extract_default_mc_metrics` is built (see ``outputs="mc_metrics"`` on
-    :func:`square.report.build_scenario_report`); the returned ``report`` is ``None``.
+    When ``include_full_report`` is False, :func:`square.report.build_scenario_report` is called with
+    ``outputs="mc_metrics"`` (dashboard + ``algorithm_metrics`` only). That path still evaluates formulas,
+    distance, patch/rollup, timing, and dashboard fields each draw; the returned ``report`` is ``None``.
     """
     ov = dict(numeric_overrides) if numeric_overrides else {}
     b = apply_numeric_overrides(bundle, ov) if ov else bundle

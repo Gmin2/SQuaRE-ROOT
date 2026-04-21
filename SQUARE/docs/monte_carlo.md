@@ -11,10 +11,11 @@ Sample uncertain parameters **θ** from priors in a study YAML, evaluate the det
 
 ## Forward model
 
-- :func:`square.mc.evaluate_forward_model` — patches modality/QEC numeric `parameter_entry` values, runs :func:`square.report.build_scenario_report`.
+- :func:`square.mc.evaluate_forward_model` — patches modality/QEC numeric `parameter_entry` values, runs :func:`square.report.build_scenario_report`. With ``include_full_report=False``, the report builder returns only ``dashboard`` and ``algorithm_metrics`` (not the full contract envelope), but still executes the same pre-dashboard pipeline (formulas, ``d``, rollup, timing) per sample — it is not a constant-time shortcut.
+- Default per-sample metrics from :func:`square.mc.forward_model.extract_default_mc_metrics` include dashboard scalars such as ``logical_failure_probability_union_depth_proxy`` (``min(1, D×p_L)`` union proxy when inputs exist) and ``magic_limited_runtime_multiplier`` (when the magic throughput dashboard check runs; otherwise ``null`` in the extracted float slice).
 - Supported θ keys: :data:`square.mc.PARAMETER_LAYERS`.
 
-**Engine vs MC (v12+):** Reports build heuristic ``p_effective`` from modality ``p_nominal`` = ``max(single_qubit_gate_error_rate, two_qubit_gate_error_rate)`` when both OSRE extended rates are usable, else fallbacks (see ``docs/output-contract.md`` § ``logical_fault_model`` / contract history v11–v12). As of **v12**, ``PARAMETER_LAYERS`` includes those two extended keys so ``square-mc`` can vary the same rates the heuristic uses for ``p_nominal`` (alongside ``characteristic_physical_gate_error_rate`` and other modality/QEC entries in the map).
+**Engine vs MC (v12+):** Reports build heuristic ``p_effective`` from modality ``p_nominal`` = ``max(single_qubit_gate_error_rate, two_qubit_gate_error_rate)`` when both OSRE extended rates are usable, else fallbacks (see ``docs/output-contract.md``, logical_fault_model section and contract history v11–v12). As of **v12**, ``PARAMETER_LAYERS`` includes those two extended keys so ``square-mc`` can vary the same rates the heuristic uses for ``p_nominal`` (alongside ``characteristic_physical_gate_error_rate`` and other modality/QEC entries in the map).
 
 ## Study YAML
 

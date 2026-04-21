@@ -9,7 +9,12 @@ from typing import Any
 from square.yaml_numeric import (
     read_modality_characteristic_gate_error,
     read_parameter_entry_float,
+    read_qcvv_characterization_error_multiplier,
 )
+
+# When ``validated_error_rate_ver`` is computed, it uses headline characteristic × σ only
+# (not heuristic ``p_nominal`` / ``p_effective``). Keep in sync with ``logical_fault_model.inputs``.
+VER_USES_HEADLINE_CHARACTERISTIC_FOR_VER = True
 
 
 def _routing_margin_logical_qubits(scenario: Mapping[str, Any]) -> float:
@@ -46,7 +51,9 @@ def build_system_metrics_block(
     * **LQC** — only when Table-2-scale ``reported_total_physical_qubits``, magic factory footprint,
       and patch ``physical_qubits_per_logical`` are all available; else ``null`` + doc string.
     * **LOB / headroom** — ``ε / (p_L × s_QEM)`` vs ``abstract_measurement_depth_layers`` when
-      ``logical_fault_model`` supplies ``p_L`` and scenario ``qec.logical_error_budget`` supplies ε.
+      ``logical_fault_model`` supplies phenomenological ``p_L`` and scenario ``qec.logical_error_budget``
+      supplies ε. ``p_L`` uses the **heuristic** effective physical rate (``p_effective`` stack), not the
+      separate **VER** scalar (headline characteristic × σ).
     * **QOT** — ``max(1, parallel_ccz_paths) / τ`` in abstract-layer-proxies per second when τ exists.
     * **VER** — modality gate error × QCVV multiplier when ``paths.qcvv`` is set.
     * **Mitigated operations ceiling** — ``LOB / Γ`` with QEM ``sampling_shot_overhead_multiplier`` as Γ;
@@ -124,8 +131,9 @@ def build_system_metrics_block(
         lob = float(logical_error_budget / denom)
         notes.append(
             "LOB uses ε / (p_L × s_QEM) with phenomenological p_L from logical_fault_model "
-            "(includes VER+scaling in p_L when enabled) and QEM effective_logical_error_rate_suppression_factor "
-            "as s_QEM (1 when no QEM path)."
+            "(p_L is driven by heuristic p_effective: p_nominal × QCVV σ × scaling penalty on that stack, "
+            "not by validated_error_rate_ver, which is headline characteristic × σ only) and "
+            "QEM effective_logical_error_rate_suppression_factor as s_QEM (1 when no QEM path)."
         )
         if d_layers is not None:
             headroom = float(lob - d_layers)
@@ -163,15 +171,10 @@ def build_system_metrics_block(
         notes.append("QOT omitted: need logical_cycle_time_microseconds > 0.")
 
     ver: float | None = None
-    p_nominal = read_modality_characteristic_gate_error(modality, warnings, context="paths.modality")
+    p_characteristic = read_modality_characteristic_gate_error(modality, warnings, context="paths.modality")
     if qcvv_doc is not None:
-        sigma = read_parameter_entry_float(
-            qcvv_doc,
-            "effective_physical_error_rate_multiplier_from_characterization",
-            warnings,
-            context="paths.qcvv",
-        )
-        if p_nominal is None:
+        sigma = read_qcvv_characterization_error_multiplier(qcvv_doc, warnings, context="paths.qcvv")
+        if p_characteristic is None:
             notes.append(
                 "VER omitted: need modality characteristic_physical_gate_error_rate for QCVV multiplier."
             )
@@ -182,7 +185,7 @@ def build_system_metrics_block(
         elif sigma <= 0.0:
             warnings.append("system_metrics: QCVV characterization multiplier <= 0; VER omitted.")
         else:
-            ver = float(p_nominal * sigma)
+            ver = float(p_characteristic * sigma)
             notes.append(
                 "VER = modality characteristic_physical_gate_error_rate × "
                 "QCVV effective_physical_error_rate_multiplier_from_characterization (scalar proxy)."
