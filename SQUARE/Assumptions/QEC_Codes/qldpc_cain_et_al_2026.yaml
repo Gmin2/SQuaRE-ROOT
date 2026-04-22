@@ -1,0 +1,101 @@
+# Quantum LDPC (high-rate) QEC assumptions used in the headline Cain et al. (2026) neutral-atom Shor analysis.
+# SQuaRE still evaluates ``logical_qubit_patch_physical_qubit_count_formula`` in the distance ``d`` for dashboard
+# compatibility; this is a **phenomenological footprint proxy**, not a literal LDPC tensor-network layout.
+document_id: qldpc_cain_et_al_2026
+schema_version: 1
+primary_reference: >-
+  Cain, M., Xu, Q., King, R., Picard, L. R. B., Levine, H., Endres, M., Preskill, J., Huang, H.-Y., &
+  Bluvstein, D. Shor's algorithm is possible with as few as 10,000 reconfigurable atomic qubits (2026).
+arxiv: "2603.28627"
+date_issued: "2026-03-30"
+notes: >
+  Abstract cites “high-rate quantum error-correcting codes” as one lever alongside efficient logical
+  instruction sets and circuit design. Distance heuristics below reuse the same phenomenological union-bound
+  machinery as surface-code profiles (with explicit warnings in reports) until LDPC-specific distance
+  optimizers are implemented. Patch formula uses a reduced constant vs Gidney & Ekerå surface patches to
+  reflect “smaller physical overhead per logical” at a **fixed symbolic distance d** — refine against the
+  paper’s pinned layouts.
+
+code_family:
+  value: "quantum_ldpc"
+  unit: "descriptor"
+  confidence: estimated
+  source: "Cain et al. (2026), abstract (high-rate quantum error-correcting codes)"
+  date: "2026-03-30"
+  section: "Abstract"
+  layer: qec
+
+logical_qubit_patch_physical_qubit_count_formula:
+  value: "0.5 * (d + 1) ** 2"
+  unit: "physical_qubits_as_function_of_distance_d"
+  confidence: speculative
+  source: "SQuaRE illustrative proxy (reduced constant vs surface 2*(d+1)^2); replace with paper-pinned LDPC footprint"
+  date: "2026-03-30"
+  section: "SQuaRE placeholder"
+  notes: >
+    Not a literal LDPC parity-check tensor layout. Keeps eval_numeric_formula_with_bindings(d) stable while
+    signaling lower overhead than the surface patch formula in surface_gidney_ekera_2021.yaml.
+
+logical_operations_implementation:
+  value: "ldpc_syndrome_and_logical_layer_schedule"
+  unit: "descriptor"
+  confidence: estimated
+  source: "Cain et al. (2026), narrative (efficient logical instruction sets + LDPC)"
+  date: "2026-03-30"
+  section: "Abstract"
+  layer: qec
+
+# Tunables for reports when scenarios set qec.distance_policy: heuristic_union_bound (phenomenological).
+heuristic_surface_code_physical_threshold_order_of_magnitude:
+  value: 0.012
+  unit: "error_probability_per_gate"
+  confidence: speculative
+  source: "Order-of-magnitude stand-in for LDPC threshold scale; replace with calibrated p_th for the cited code family."
+  date: "2026-03-30"
+  section: "SQuaRE report heuristic"
+  layer: qec
+
+heuristic_logical_error_prefactor:
+  value: 0.05
+  unit: "dimensionless"
+  confidence: speculative
+  source: "Leading coefficient in phenomenological logical error model (same functional form as surface heuristic)."
+  date: "2026-03-30"
+  section: "SQuaRE report heuristic"
+  layer: qec
+
+heuristic_distance_min_d:
+  value: 5
+  unit: "count"
+  confidence: speculative
+  source: "Clamp for heuristic distance suggestions in reports."
+  date: "2026-03-30"
+  section: "SQuaRE report heuristic"
+  layer: qec
+
+heuristic_distance_max_d:
+  value: 55
+  unit: "count"
+  confidence: speculative
+  source: "Clamp for heuristic distance suggestions in reports."
+  date: "2026-03-30"
+  section: "SQuaRE report heuristic"
+  layer: qec
+
+qec_decode_latency_microseconds:
+  value: 5.0
+  unit: "microseconds"
+  confidence: speculative
+  source: "SQuaRE LDPC decode-latency placeholder; refine from Cain et al."
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: qec
+
+qec_measurement_round_time_microseconds:
+  value: 30.0
+  unit: "microseconds"
+  confidence: speculative
+  source: "SQuaRE measurement-round placeholder for LDPC stack"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: qec

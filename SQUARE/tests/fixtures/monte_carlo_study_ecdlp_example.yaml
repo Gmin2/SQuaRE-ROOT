@@ -1,0 +1,27 @@
+# Monte Carlo study: prior predictive over modality + QEC numeric parameters (ECDLP scenario).
+# Lives under tests/fixtures/ (MVP keeps only scenario YAML in Configs/). Run:
+#   square-mc tests/fixtures/monte_carlo_study_ecdlp_example.yaml --samples 100 --root <SQUARE>
+schema_version: 1
+study_id: mc_ecdlp_gate_and_cycle_priors
+description: >-
+  Example priors for the ECDLP low-Toffoli MVP scenario.
+
+scope: prior_predictive_only
+
+base_scenario: Configs/ecdlp_secp256k1_babbush_2026_low_toffoli.yaml
+
+parameters:
+  - parameter_key: characteristic_physical_gate_error_rate
+    distribution: uniform
+    low: 0.0005
+    high: 0.002
+
+  - parameter_key: surface_code_cycle_time
+    distribution: log_uniform
+    low: 0.5
+    high: 2.0
+
+  - parameter_key: heuristic_surface_code_physical_threshold_order_of_magnitude
+    distribution: uniform
+    low: 0.005
+    high: 0.02

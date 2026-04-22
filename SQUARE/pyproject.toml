@@ -12,13 +12,39 @@ dependencies = ["pyyaml>=6"]
 
 [project.scripts]
 square-report = "square.cli:main"
+square-mc = "square.cli_mc:main"
+square-mvp-demo = "square.cli_demo:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=7"]
+plots = ["matplotlib>=3.7"]
+interactive = ["matplotlib>=3.7", "ipywidgets>=8", "jupyter>=1"]
+web = ["matplotlib>=3.7", "streamlit>=1.28"]
+dev = [
+  "pytest>=7",
+  "ruff~=0.9",
+  "mypy~=1.14",
+  "types-PyYAML",
+  "matplotlib>=3.7",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["square*"]
+
+[tool.ruff]
+target-version = "py310"
+src = ["square", "tests", "scripts"]
+
+[tool.ruff.lint]
+# Pyflakes, isort, pyupgrade, whitespace; omit pycodestyle "E" to avoid mass E501 line-length churn.
+select = ["F", "I", "UP", "W"]
+
+[tool.mypy]
+python_version = "3.10"
+packages = ["square"]
+warn_unused_ignores = true
+show_error_codes = true
+strict_optional = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

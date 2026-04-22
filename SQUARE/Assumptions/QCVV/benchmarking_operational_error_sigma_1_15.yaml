@@ -1,0 +1,29 @@
+# Illustrative QCVV profile: operational error budget modestly above headline modality rate.
+document_id: qcvv_benchmarking_operational_error_sigma_1_15
+schema_version: 1
+primary_reference: >-
+  SQuaRE illustrative example — not tied to a single device paper; models benchmarking showing
+  effective per-gate error ~15% above headline spec for resource pessimism.
+date_issued: "2026-04-20"
+notes: >
+  Use alongside a modality ``characteristic_physical_gate_error_rate`` for VER = p_nominal × σ.
+  Replace with experiment-specific QCVV YAML when calibrating a real stack.
+
+effective_physical_error_rate_multiplier_from_characterization:
+  value: 1.15
+  unit: "dimensionless"
+  confidence: speculative
+  source: "SQuaRE illustrative benchmarking envelope (not a lab measurement)"
+  date: "2026-04-20"
+  section: "SQuaRE QCVV example"
+  notes: σ > 1 widens effective physical error used in heuristic distance and logical_fault_model when paths.qcvv is set.
+  layer: qcvv
+
+calibration_cycle_overhead_multiplier:
+  value: 1.0
+  unit: "dimensionless"
+  confidence: speculative
+  source: "SQuaRE illustrative example (no extra calibration wall-time multiplier)"
+  date: "2026-04-20"
+  section: "SQuaRE QCVV example"
+  layer: qcvv

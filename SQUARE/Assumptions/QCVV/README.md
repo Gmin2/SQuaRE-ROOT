@@ -11,3 +11,4 @@ Place one logical profile per file (e.g. `identity_no_overhead.yaml` for a no-op
 | File | Role |
 |------|------|
 | `identity_no_overhead.yaml` | Placeholder: explicit unit multipliers of 1.0 so scenarios can wire QCVV without changing downstream math yet |
+| `benchmarking_operational_error_sigma_1_15.yaml` | Illustrative σ=1.15 multiplier for VER and effective-error stack (speculative provenance; swap for device-specific QCVV) |

@@ -165,7 +165,7 @@ def _closed_form_odd_distance(
     return _odd_int_clamped(d_raw, min_d=min_d, max_d=max_d), meta
 
 
-def suggest_surface_code_distance_union_bound(
+def suggest_union_bound_code_distance(
     *,
     physical_gate_error_rate: float,
     logical_qubit_count: float,
@@ -178,8 +178,9 @@ def suggest_surface_code_distance_union_bound(
     use_discrete_scan: bool = True,
 ) -> tuple[int, dict[str, Any]]:
     """
-    Suggest an odd code distance using a conservative union bound.
+    Suggest an odd code distance using a conservative phenomenological union bound.
 
+    Code-family agnostic (surface, LDPC placeholder profiles, etc.); not a paper-specific optimizer.
     When ``use_discrete_scan`` is True (default), uses :func:`min_odd_distance_discrete_scan`.
     Otherwise uses the closed-form inversion + clamping (legacy).
 
@@ -234,3 +235,7 @@ def suggest_surface_code_distance_union_bound(
     base_meta.update(scan_meta)
     base_meta["distance_d"] = d
     return d, base_meta
+
+
+# Backward-compatible alias (older name implied surface-only).
+suggest_surface_code_distance_union_bound = suggest_union_bound_code_distance

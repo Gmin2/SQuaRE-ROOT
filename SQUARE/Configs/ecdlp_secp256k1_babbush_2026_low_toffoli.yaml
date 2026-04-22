@@ -1,0 +1,26 @@
+# ECDLP secp256k1 (256-bit) using Babbush et al. (2026) low-Toffoli headline envelope + Babbush superconducting baseline.
+schema_version: 1
+scenario: ecdlp_secp256k1_babbush_2026_low_toffoli
+description: >-
+  Logical resources: ≤1450 logical qubits and ≤70M Toffoli gates (low_toffoli_variant). Physical baseline
+  matches the paper’s superconducting ~10⁻³ gate error and planar connectivity narrative; cycle/reaction
+  timings are documented placeholders in the modality file until extracted from the full paper.
+  Identity QCVV/QEM (σ=s=Γ=1) wires layers for VER / mitigated ceiling without changing multipliers.
+
+target:
+  problem: ecdlp_secp256k1_256_bit
+  curve_bit_length: 256
+  ecdlp_variant: low_toffoli_variant
+
+qec:
+  distance_policy: heuristic_union_bound
+  logical_error_budget: 0.1
+
+paths:
+  modality: Assumptions/Modalities/superconducting_babbush_et_al_2026.yaml
+  qec_code: Assumptions/QEC_Codes/surface_gidney_ekera_2021.yaml
+  magic: Assumptions/MagicStateProduction/ccz_factory_gidney_ekera_2021.yaml
+  magic_aux: Assumptions/MagicStateProduction/t_factory_fallback_gidney_ekera_2021.yaml
+  algorithm: Algorithms/ecdlp_secp256k1_babbush_et_al_2026.yaml
+  qcvv: Assumptions/QCVV/identity_no_overhead.yaml
+  qem: Assumptions/QEM/identity_no_overhead.yaml

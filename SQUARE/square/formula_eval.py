@@ -79,17 +79,17 @@ def eval_numeric_formula_with_bindings(expression: str, bindings: Mapping[str, f
                 return float(bindings[node.id])
             raise FormulaEvalError(f"Disallowed name: {node.id!r}")
         if isinstance(node, ast.BinOp):
-            op_type = type(node.op)
-            if op_type not in _ALLOWED_BINOPS:
-                raise FormulaEvalError(f"Disallowed binary operator: {op_type.__name__}")
+            bop_type = type(node.op)
+            if bop_type not in _ALLOWED_BINOPS:
+                raise FormulaEvalError(f"Disallowed binary operator: {bop_type.__name__}")
             left = _eval(node.left)
             right = _eval(node.right)
-            return float(_ALLOWED_BINOPS[op_type](left, right))
+            return float(_ALLOWED_BINOPS[bop_type](left, right))
         if isinstance(node, ast.UnaryOp):
-            op_type = type(node.op)
-            if op_type not in _ALLOWED_UNARY:
-                raise FormulaEvalError(f"Disallowed unary operator: {op_type.__name__}")
-            return float(_ALLOWED_UNARY[op_type](_eval(node.operand)))
+            uop_type = type(node.op)
+            if uop_type not in _ALLOWED_UNARY:
+                raise FormulaEvalError(f"Disallowed unary operator: {uop_type.__name__}")
+            return float(_ALLOWED_UNARY[uop_type](_eval(node.operand)))
         if isinstance(node, ast.Call):
             if (
                 isinstance(node.func, ast.Name)

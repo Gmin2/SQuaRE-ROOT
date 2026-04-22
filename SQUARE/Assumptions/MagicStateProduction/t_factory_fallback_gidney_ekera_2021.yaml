@@ -11,6 +11,21 @@ notes: >
   Figure 1 (and its caption) states that past ~n ≈ 32786 the construction exceeds the CCZ factory
   error budget and the model switches to the T factory of Fowler et al. This file flags that branch;
   detailed T-factory YAML should cite the original factory reference when implementing throughput.
+  The CCZ→T transition scale is meaningful only for RSA-style integer factoring targets (``target.problem``),
+  not for ECDLP or other problems; see ``applies_when_target_problem_in``.
+
+applies_when_target_problem_in:
+  value:
+    - rsa_integer_factoring
+  unit: "scenario target.problem slug list"
+  confidence: proven
+  source: "SQuaRE engine contract (RSA modulus bit length vs G&E Figure 1 caption)"
+  date: "2026-04-21"
+  section: "engine applicability"
+  notes: >
+    Reports only evaluate ``n >= transition`` for ``t_factory_fallback_recommended`` when the scenario
+    target.problem matches one of these slugs; other problems still load this document for provenance
+    but emit a one-line applicability warning and omit the transition scale from dashboard fields.
 
 t_factory_used_beyond_ccz_error_budget:
   value: true

@@ -6,338 +6,240 @@ Output shape is documented in ``docs/output-contract.md`` (``report_contract_ver
 
 from __future__ import annotations
 
-import re
-from datetime import datetime, timezone
-from typing import Any, Mapping
+import math
+from collections.abc import Mapping
+from typing import Any, Literal
 
-from square.formula_eval import FormulaEvalError, eval_numeric_formula, eval_numeric_formula_with_bindings
+from square.heuristic_union_inputs import read_heuristic_union_bound_inputs
+from square.layout_optimization import (
+    build_layout_distance_candidates,
+    summarize_layout_optimization,
+)
 from square.loader import ScenarioBundle
-from square.layout_optimization import build_layout_distance_candidates, summarize_layout_optimization
-from square.qec_distance_heuristic import suggest_surface_code_distance_union_bound
-from square.schedule_heuristic import build_parallel_depth_schedule_v1, infer_reaction_limited_from_scenario
+from square.qec_distance_heuristic import (
+    phenomenological_logical_error_per_cycle,
+    suggest_union_bound_code_distance,
+)
+from square.report_assembly import assemble_report_shell
+from square.report_dashboard import build_dashboard_fields
+from square.report_distance import (
+    read_heuristic_phenomenological_logical_error_model_applies,
+    resolve_code_distance_full,
+)
+from square.report_formula_pins import (
+    TABLE2_RSA2048_ROWS_KEY,
+    build_formula_evaluation_and_pins,
+    parse_table2_pins_early,
+    table1_pin_row,
+)
+from square.report_layers import build_report_sources_and_layers
+from square.report_magic_aux import evaluate_magic_aux_t_factory_dashboard
+from square.report_markdown import report_to_markdown
+from square.report_physical_layout import build_physical_rollup_and_layout_estimate
+from square.report_qec_patch import evaluate_patch_physical_per_logical
+from square.report_system_metrics import (
+    VER_USES_HEADLINE_CHARACTERISTIC_FOR_VER,
+    build_system_metrics_block,
+)
+from square.report_timing import build_timing_section
+from square.yaml_numeric import (
+    read_evaluated_metric_float,
+    read_modality_characteristic_gate_error,
+    read_modality_nominal_gate_error_for_heuristic,
+    read_parameter_entry_float_default,
+    read_positive_parameter_microseconds,
+    read_qcvv_characterization_error_multiplier,
+)
 
-_REPORT_CONTRACT_VERSION = 4
+_REPORT_CONTRACT_VERSION = 17
+REPORT_CONTRACT_VERSION = _REPORT_CONTRACT_VERSION
 
-_HEADER_KEYS = frozenset(
+# Curated modality keys surfaced under top-level ``physical_layer`` (OSRE native physical layer).
+OSRE_EXTENDED_PHYSICAL_PARAMETER_KEYS: frozenset[str] = frozenset(
     {
-        "document_id",
-        "schema_version",
-        "primary_reference",
-        "doi",
-        "arxiv",
-        "date_issued",
-        "notes",
+        "coherence_time_t1_microseconds",
+        "coherence_time_t2_microseconds",
+        "single_qubit_gate_error_rate",
+        "two_qubit_gate_error_rate",
+        "measurement_error_rate",
+        "idle_error_rate_per_cycle",
+        "correlated_noise_parameter",
+        "leakage_error_rate",
     }
 )
 
-_FORMULA_METRICS: tuple[tuple[str, str], ...] = (
-    ("abstract_logical_qubits_formula", "abstract_logical_qubits"),
-    ("abstract_measurement_depth_formula", "abstract_measurement_depth_layers"),
-    ("abstract_toffoli_plus_t_halves_count_formula", "abstract_toffoli_plus_t_halves_count"),
+# Optional OSRE memo-aligned transparency slots (scaling / variability). **Not** fed into heuristic
+# ``p_effective`` or distance in this engine version; see ``physical_layer.notes`` on each report.
+OSRE_OPTIONAL_PHYSICAL_RICHNESS_KEYS: frozenset[str] = frozenset(
+    {
+        "fabrication_variability_proxy",
+        "thermal_load_index_proxy",
+        "control_plane_saturation_proxy",
+    }
 )
 
-_PINNED_SUFFIX_RE = re.compile(r"_n_(\d+)$")
-_CCZ_ROW_RE = re.compile(r"_(\d+)_ccz\b")
+OSRE_PHYSICAL_LAYER_SNAPSHOT_KEYS: frozenset[str] = frozenset().union(
+    OSRE_EXTENDED_PHYSICAL_PARAMETER_KEYS,
+    OSRE_OPTIONAL_PHYSICAL_RICHNESS_KEYS,
+)
 
-_TABLE1_PINS_KEY = "paper_table1_pins_by_modulus_bit_length"
-_TABLE2_RSA2048_ROWS_KEY = "paper_table2_rsa2048_reference_rows"
-
-
-def _is_parameter_entry(obj: Any) -> bool:
-    return isinstance(obj, dict) and "value" in obj and "unit" in obj
-
-
-def _split_document(doc: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    header: dict[str, Any] = {}
-    parameters: dict[str, Any] = {}
-    for key, val in doc.items():
-        sk = str(key)
-        if sk in _HEADER_KEYS:
-            header[sk] = val
-        elif _is_parameter_entry(val):
-            parameters[sk] = val
-        else:
-            header[sk] = val
-    return header, parameters
+_PHYSICAL_LAYER_TRANSPARENCY_NOTES: tuple[str, ...] = (
+    "Optional richness keys (fabrication_variability_proxy, thermal_load_index_proxy, "
+    "control_plane_saturation_proxy) are surfaced for OSRE transparency when present in modality YAML; "
+    "they do not enter heuristic p_effective, union-bound distance, or logical_fault_model in this version.",
+)
 
 
-def _source_header(doc: Mapping[str, Any]) -> dict[str, Any]:
-    return {k: doc[k] for k in _HEADER_KEYS if k in doc}
-
-
-def _scenario_public_dict(scenario: Mapping[str, Any]) -> dict[str, Any]:
-    return dict(scenario)
-
-
-def _parse_ccz_count_from_table2(row_value: Any) -> int | None:
-    if row_value is None:
-        return None
-    text = str(row_value)
-    m = _CCZ_ROW_RE.search(text)
-    return int(m.group(1)) if m else None
-
-
-def _pinned_algorithm_entries_for_n(algorithm: Mapping[str, Any], n: int) -> dict[str, Any]:
-    out: dict[str, Any] = {}
-    for key, val in algorithm.items():
-        if key in _HEADER_KEYS or not isinstance(val, dict):
-            continue
-        m = _PINNED_SUFFIX_RE.search(str(key))
-        if m and int(m.group(1)) == n:
-            out[str(key)] = val
-    return out
-
-
-def _table1_pin_row(algo: Mapping[str, Any], n: int) -> dict[str, Any] | None:
-    """Return the Table 1 pin sub-map for modulus bit length ``n`` when present."""
-    entry = algo.get(_TABLE1_PINS_KEY)
-    if not isinstance(entry, dict):
-        return None
-    raw_val = entry.get("value")
-    if not isinstance(raw_val, dict):
-        return None
-    sub = raw_val.get(str(int(n)))
-    return sub if isinstance(sub, dict) else None
-
-
-def _table2_rsa2048_row_for_ccz(magic: Mapping[str, Any], ccz: int) -> dict[str, Any] | None:
-    """Match a Table 2 reference row by ``ccz_factories`` (RSA-2048 consolidated block)."""
-    entry = magic.get(_TABLE2_RSA2048_ROWS_KEY)
-    if not isinstance(entry, dict):
-        return None
-    rows = entry.get("value")
-    if not isinstance(rows, list):
-        return None
-    target = int(ccz)
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        raw = row.get("ccz_factories")
-        try:
-            if int(raw) == target:
-                return row
-        except (TypeError, ValueError):
-            continue
-    return None
-
-
-def _synthetic_pinned_from_table1(algo: Mapping[str, Any], n: int) -> dict[str, Any]:
+def _build_physical_layer_snapshot(
+    modality_parameters: Mapping[str, Any],
+    *,
+    document_id: Any,
+) -> dict[str, Any]:
     """
-    Rebuild legacy-style pinned parameter keys from :pyattr:`_TABLE1_PINS_KEY` for ``algorithm_metrics``.
+    Passthrough of extended physical parameters from modality YAML into a stable report envelope.
+
+    Full modality parameters remain under ``layers.modality.parameters``; this block duplicates only
+    OSRE-aligned keys for tooling. See ``docs/output-contract.md`` (physical_layer section).
     """
-    parent = algo.get(_TABLE1_PINS_KEY)
-    sub = _table1_pin_row(algo, n)
-    if not isinstance(parent, dict) or sub is None:
-        return {}
-    base = {
-        "confidence": parent.get("confidence"),
-        "source": parent.get("source"),
-        "date": parent.get("date"),
-        "section": parent.get("section"),
-        "layer": "algorithm",
-        "notes": f"Resolved from {_TABLE1_PINS_KEY} for n={n}.",
+    picked: dict[str, Any] = {}
+    for key in OSRE_PHYSICAL_LAYER_SNAPSHOT_KEYS:
+        entry = modality_parameters.get(key)
+        if isinstance(entry, dict):
+            picked[key] = entry
+    doc_raw = document_id
+    doc_id: str | None = (
+        str(doc_raw).strip()
+        if doc_raw is not None and str(doc_raw).strip()
+        else None
+    )
+    status = "passthrough_from_modality" if picked else "no_extended_keys_in_profile"
+    return {
+        "schema": "physical_layer_v1",
+        "document_id": doc_id,
+        "status": status,
+        "notes": list(_PHYSICAL_LAYER_TRANSPARENCY_NOTES),
+        "parameter_keys": sorted(picked.keys()),
+        "parameters": picked,
     }
-    out: dict[str, Any] = {}
-    if "toffoli_plus_t_halves_billions" in sub:
-        out[f"toffoli_plus_t_halves_count_billions_n_{n}"] = {
-            **base,
-            "value": sub["toffoli_plus_t_halves_billions"],
-            "unit": "billions_of_toffoli_plus_t_halves",
-        }
-    if "minimum_spacetime_volume_megaqubit_days" in sub:
-        out[f"minimum_spacetime_volume_megaqubitdays_n_{n}"] = {
-            **base,
-            "value": sub["minimum_spacetime_volume_megaqubit_days"],
-            "unit": "megaqubit_days",
-        }
-    return out
 
 
-def _table2_dashboard_row_ref(ccz: int) -> str:
-    """Stable logical pointer into the consolidated Table 2 YAML block."""
-    return f"{_TABLE2_RSA2048_ROWS_KEY}#ccz_factories={int(ccz)}"
-
-
-def _magic_float_by_key(magic: Mapping[str, Any], key: str) -> float | None:
-    entry = magic.get(key)
-    if not isinstance(entry, dict) or entry.get("value") is None:
-        return None
-    try:
-        return float(entry["value"])
-    except (TypeError, ValueError):
-        return None
-
-
-def _engine_version() -> str:
-    try:
-        from importlib.metadata import version
-
-        return version("square")
-    except Exception:
-        return "0.0.1"
-
-
-def _parse_code_distance(
-    scenario: Mapping[str, Any],
-    *,
-    override: int | None,
-) -> tuple[int | None, list[str]]:
-    """
-    Resolve surface-code distance ``d`` from CLI override, then scenario YAML.
-
-    Supported scenario shapes: top-level ``qec_code_distance: <int>``, or ``qec: { code_distance: <int> }``.
-    """
-    local_warnings: list[str] = []
-    if override is not None:
-        try:
-            d_ov = int(override)
-        except (TypeError, ValueError):
-            local_warnings.append("code_distance override is not an integer; ignoring.")
-            d_ov = None
-        if d_ov is not None and d_ov <= 0:
-            local_warnings.append("code_distance override must be positive; ignoring.")
-            d_ov = None
-        if d_ov is not None:
-            return d_ov, local_warnings
-
-    raw: Any = scenario.get("qec_code_distance")
-    if raw is None and isinstance(scenario.get("qec"), dict):
-        raw = scenario["qec"].get("code_distance")
-
-    if raw is None:
-        return None, local_warnings
-
-    try:
-        d = int(raw)
-    except (TypeError, ValueError):
-        local_warnings.append("Scenario qec_code_distance / qec.code_distance is not an integer; ignoring.")
-        return None, local_warnings
-    if d <= 0:
-        local_warnings.append("Scenario code distance must be positive; ignoring.")
-        return None, local_warnings
-    return d, local_warnings
-
-
-def _param_entry_float(entry: Any, default: float) -> float:
-    if isinstance(entry, dict) and entry.get("value") is not None:
-        try:
-            return float(entry["value"])
-        except (TypeError, ValueError):
-            return default
-    return default
-
-
-def _resolve_code_distance_full(
-    scenario: Mapping[str, Any],
-    *,
-    override: int | None,
-    modality: Mapping[str, Any],
-    qec: Mapping[str, Any],
+def _scaling_reference_physical_qubits(
+    rsa_phys_millions: float | None,
     evaluated: Mapping[str, Any],
     warnings: list[str],
-) -> tuple[int | None, dict[str, Any]]:
+) -> float:
     """
-    CLI override, explicit scenario distance, or heuristic (when ``qec.distance_policy`` requests it).
+    Device-size proxy ``N`` for OSRE-style scaling penalty ``1 + α log N + β N``.
+
+    Prefers Table-2 pinned end-to-end physical qubits when available; otherwise falls back to
+    evaluated ``abstract_logical_qubits`` (weak proxy, documented in sensitivity notes).
     """
-    meta: dict[str, Any] = {"mode": "unset"}
-
-    if override is not None:
-        d, w = _parse_code_distance(scenario, override=override)
-        warnings.extend(w)
-        meta.update({"mode": "cli_override", "distance_d": d, "from_cli_override": True})
-        return d, meta
-
-    d_explicit, w = _parse_code_distance(scenario, override=None)
-    warnings.extend(w)
-    if d_explicit is not None:
-        meta.update({"mode": "explicit_scenario", "distance_d": d_explicit, "explicit_in_scenario": True})
-        return d_explicit, meta
-
-    qec_block = scenario.get("qec") if isinstance(scenario.get("qec"), dict) else {}
-    policy_raw = qec_block.get("distance_policy") or qec_block.get("distance_mode")
-    policy = str(policy_raw).strip().lower() if policy_raw is not None else ""
-    heuristic_aliases = frozenset({"heuristic_union_bound", "optimize_heuristic", "heuristic"})
-    if policy not in heuristic_aliases:
-        meta["distance_d"] = None
-        return None, meta
-
-    gate_entry = modality.get("characteristic_physical_gate_error_rate")
-    p: float | None = None
-    if isinstance(gate_entry, dict) and gate_entry.get("value") is not None:
-        try:
-            p = float(gate_entry["value"])
-        except (TypeError, ValueError):
-            p = None
-    if p is None:
-        warnings.append(
-            "qec.distance_policy requests a heuristic but modality characteristic_physical_gate_error_rate "
-            "is missing or non-numeric; distance d not computed."
-        )
-        meta.update({"mode": "heuristic_failed_missing_p", "distance_d": None})
-        return None, meta
-
-    abs_lq = evaluated.get("abstract_logical_qubits")
-    depth_l = evaluated.get("abstract_measurement_depth_layers")
-    lq_val: float | None = None
-    dp_val: float | None = None
-    if isinstance(abs_lq, dict) and abs_lq.get("value") is not None:
-        try:
-            lq_val = float(abs_lq["value"])
-        except (TypeError, ValueError):
-            lq_val = None
-    if isinstance(depth_l, dict) and depth_l.get("value") is not None:
-        try:
-            dp_val = float(depth_l["value"])
-        except (TypeError, ValueError):
-            dp_val = None
-    if lq_val is None or dp_val is None:
-        warnings.append(
-            "Heuristic distance skipped: need evaluated abstract_logical_qubits and abstract_measurement_depth_layers."
-        )
-        meta.update({"mode": "heuristic_failed_missing_formulas", "distance_d": None})
-        return None, meta
-
-    budget_raw = qec_block.get("logical_error_budget", 0.1)
-    try:
-        budget_f = float(budget_raw)
-    except (TypeError, ValueError):
-        budget_f = 0.1
-        warnings.append("qec.logical_error_budget invalid; using 0.1.")
-
-    p_th = _param_entry_float(qec.get("heuristic_surface_code_physical_threshold_order_of_magnitude"), 0.01)
-    pref = _param_entry_float(qec.get("heuristic_logical_error_prefactor"), 0.05)
-    min_d = int(_param_entry_float(qec.get("heuristic_distance_min_d"), 5))
-    max_d = int(_param_entry_float(qec.get("heuristic_distance_max_d"), 55))
-
-    dist_opt_raw = qec_block.get("distance_optimizer", "discrete_scan")
-    dist_opt = str(dist_opt_raw).strip().lower() if dist_opt_raw is not None else "discrete_scan"
-    use_discrete_scan = dist_opt != "closed_form"
-
-    d, hmeta = suggest_surface_code_distance_union_bound(
-        physical_gate_error_rate=p,
-        logical_qubit_count=lq_val,
-        qec_cycle_count_proxy=dp_val,
-        logical_error_budget=budget_f,
-        phenomenological_p_th=p_th,
-        phenomenological_prefactor=pref,
-        min_d=min_d,
-        max_d=max_d,
-        use_discrete_scan=use_discrete_scan,
+    if rsa_phys_millions is not None:
+        return max(1.0, float(rsa_phys_millions) * 1e6)
+    v = read_evaluated_metric_float(
+        evaluated,
+        "abstract_logical_qubits",
+        warnings,
+        context="scaling_reference_physical_qubits",
     )
+    if v is not None:
+        return max(1.0, v)
     warnings.append(
-        "code distance d from heuristic_union_bound (phenomenological model), "
-        "not the paper-specific optimizer in Gidney & Ekerå 2021."
+        "[scaling_reference_physical_qubits] Using N=1.0 fallback: no RSA Table-2 physical-qubit pin "
+        "and abstract_logical_qubits missing or non-finite. Heuristic scaling penalty "
+        "(1 + α log N + β N) may be understated vs a real device-size proxy."
     )
-    meta.update(
-        {
-            "mode": "heuristic_union_bound",
-            "distance_d": d,
-            "heuristic": hmeta,
-            "logical_error_budget": budget_f,
-            "distance_optimizer": "discrete_scan" if use_discrete_scan else "closed_form",
-        }
+    return 1.0
+
+
+def _effective_physical_gate_error_stack(
+    *,
+    modality: Mapping[str, Any],
+    qcvv_doc: Mapping[str, Any] | None,
+    qec: Mapping[str, Any],
+    rsa_phys_millions: float | None,
+    evaluated: Mapping[str, Any],
+    warnings: list[str],
+) -> dict[str, Any]:
+    """
+    Nominal modality gate-error proxy, QCVV multiplier, scaling penalty, and effective ``p`` for heuristics.
+
+    ``p_nominal`` is chosen by :func:`square.yaml_numeric.read_modality_nominal_gate_error_for_heuristic`
+    (``max(1Q, 2Q)`` when both extended rates exist, else a single extended rate, else characteristic).
+    ``p_effective = p_nominal × σ_QCVV × (1 + α log N + β N)`` when ``p_nominal`` is defined; ``N`` is
+    :func:`_scaling_reference_physical_qubits`. Coefficients ``α``, ``β`` default to ``0`` from QEC YAML
+    ``heuristic_scaling_penalty_log_coefficient`` / ``heuristic_scaling_penalty_linear_coefficient``.
+    """
+    p_nominal, p_nominal_gate_proxy_method, characteristic_ref = read_modality_nominal_gate_error_for_heuristic(
+        modality, warnings, context="paths.modality"
     )
-    return d, meta
+    sigma = 1.0
+    s_opt = read_qcvv_characterization_error_multiplier(qcvv_doc, warnings, context="paths.qcvv")
+    if s_opt is not None and s_opt > 0.0:
+        sigma = float(s_opt)
+    elif s_opt is not None:
+        warnings.append("effective_physical_error_rate_multiplier_from_characterization <= 0; using 1.0.")
+
+    alpha = read_parameter_entry_float_default(
+        qec.get("heuristic_scaling_penalty_log_coefficient"),
+        0.0,
+        warnings,
+        context="paths.qec",
+        param_name="heuristic_scaling_penalty_log_coefficient",
+    )
+    beta = read_parameter_entry_float_default(
+        qec.get("heuristic_scaling_penalty_linear_coefficient"),
+        0.0,
+        warnings,
+        context="paths.qec",
+        param_name="heuristic_scaling_penalty_linear_coefficient",
+    )
+    n_ref = _scaling_reference_physical_qubits(rsa_phys_millions, evaluated, warnings)
+    penalty = 1.0 + alpha * math.log(n_ref) + beta * n_ref
+    if penalty <= 0.0:
+        warnings.append("Scaling penalty (1 + α log N + β N) <= 0; clamping to 1.0 for p_effective.")
+        penalty = 1.0
+
+    p_effective: float | None = None
+    if p_nominal is not None:
+        p_effective = float(p_nominal * sigma * penalty)
+        if alpha != 0.0 or beta != 0.0:
+            warnings.append(
+                "physical_gate_error_rate_effective applies heuristic_scaling_penalty_* on QEC YAML; "
+                "see parameter_sensitivity.scaling_reference_physical_qubits for N."
+            )
+
+    return {
+        "p_nominal": p_nominal,
+        "p_nominal_gate_proxy_method": p_nominal_gate_proxy_method,
+        "characteristic_physical_gate_error_rate": characteristic_ref,
+        "qcvv_multiplier_sigma": sigma,
+        "scaling_penalty_log_coefficient_alpha": alpha,
+        "scaling_penalty_linear_coefficient_beta": beta,
+        "scaling_reference_physical_qubits": n_ref,
+        "scaling_penalty_factor": penalty,
+        "p_effective": p_effective,
+    }
+
+
+def _algorithm_metrics_block(
+    *,
+    n: int | None,
+    evaluated: Mapping[str, Any],
+    evaluated_skipped: list[str],
+    pinned: Mapping[str, Any],
+    ecdlp_block: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Assemble ``algorithm_metrics``; include ``ecdlp`` when in fixed-problem ECDLP mode."""
+    out: dict[str, Any] = {
+        "n": n,
+        "evaluated": dict(evaluated),
+        "evaluated_skipped": list(evaluated_skipped),
+        "pinned_in_algorithm_yaml": dict(pinned),
+    }
+    if ecdlp_block is not None:
+        out["ecdlp"] = ecdlp_block
+    return out
 
 
 def _build_layout_optimization_block(
@@ -352,64 +254,57 @@ def _build_layout_optimization_block(
     reported_total_physical_qubits: float | None,
     factory_footprint_physical_qubits: float | None,
     warnings: list[str],
+    physical_gate_error_rate_effective: float | None = None,
 ) -> dict[str, Any] | None:
     """
     Per-distance layout proxy: union-bound mass + patch formula → data-plane qubits (+ optional fit to reported total).
     """
-    qec_block = scenario.get("qec") if isinstance(scenario.get("qec"), dict) else {}
+    _raw_qec = scenario.get("qec")
+    qec_block: dict[str, Any] = _raw_qec if isinstance(_raw_qec, dict) else {}
     if qec_block.get("emit_layout_optimization") is False:
+        return None
+
+    if not read_heuristic_phenomenological_logical_error_model_applies(scenario, warnings):
         return None
 
     if patch_formula is None or logical_qubits is None or selected_d is None:
         return None
 
-    gate_entry = modality.get("characteristic_physical_gate_error_rate")
-    p: float | None = None
-    if isinstance(gate_entry, dict) and gate_entry.get("value") is not None:
-        try:
-            p = float(gate_entry["value"])
-        except (TypeError, ValueError):
-            p = None
+    p: float | None = physical_gate_error_rate_effective
+    if p is None:
+        p = read_modality_characteristic_gate_error(modality, warnings, context="paths.modality")
 
-    depth_l = evaluated.get("abstract_measurement_depth_layers")
-    dp_val: float | None = None
-    if isinstance(depth_l, dict) and depth_l.get("value") is not None:
-        try:
-            dp_val = float(depth_l["value"])
-        except (TypeError, ValueError):
-            dp_val = None
+    dp_val = read_evaluated_metric_float(
+        evaluated,
+        "abstract_measurement_depth_layers",
+        warnings,
+        context="layout_optimization",
+    )
 
     if p is None or dp_val is None:
         return None
 
-    budget_raw = qec_block.get("logical_error_budget", 0.1)
-    try:
-        budget_f = float(budget_raw)
-    except (TypeError, ValueError):
-        budget_f = 0.1
-
-    p_th = _param_entry_float(qec.get("heuristic_surface_code_physical_threshold_order_of_magnitude"), 0.01)
-    pref = _param_entry_float(qec.get("heuristic_logical_error_prefactor"), 0.05)
-    min_d = int(_param_entry_float(qec.get("heuristic_distance_min_d"), 5))
-    max_d = int(_param_entry_float(qec.get("heuristic_distance_max_d"), 55))
+    hu = read_heuristic_union_bound_inputs(
+        qec, qec_block, warnings, budget_warning_context="layout_optimization"
+    )
 
     candidates = build_layout_distance_candidates(
         patch_formula=patch_formula,
         logical_qubits=float(logical_qubits),
         physical_gate_error_rate=p,
         qec_cycle_count_proxy=dp_val,
-        logical_error_budget=budget_f,
-        phenomenological_p_th=p_th,
-        phenomenological_prefactor=pref,
-        min_d=min_d,
-        max_d=max_d,
+        logical_error_budget=hu.logical_error_budget,
+        phenomenological_p_th=hu.phenomenological_p_th,
+        phenomenological_prefactor=hu.phenomenological_prefactor,
+        min_d=hu.min_d,
+        max_d=hu.max_d,
         reported_total_physical_qubits=reported_total_physical_qubits,
         factory_footprint_physical_qubits=factory_footprint_physical_qubits,
     )
     summary = summarize_layout_optimization(
         selected_d=int(selected_d),
         candidates=candidates,
-        logical_error_budget=budget_f,
+        logical_error_budget=hu.logical_error_budget,
         patch_formula=patch_formula,
     )
     emit_trace = bool(qec_block.get("emit_optimization_trace", False))
@@ -422,11 +317,351 @@ def _build_layout_optimization_block(
     }
 
 
+def _build_logical_fault_model_block(
+    *,
+    scenario: Mapping[str, Any],
+    distance_d: int | None,
+    modality: Mapping[str, Any],
+    qec: Mapping[str, Any],
+    warnings: list[str],
+    physical_gate_error_rate_effective: float | None = None,
+    physical_error_stack: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    Phenomenological logical error per QEC cycle and logical-cycle-time proxy (OSRE memo).
+
+    Logical error uses :func:`~square.qec_distance_heuristic.phenomenological_logical_error_per_cycle`
+    (same as heuristic distance selection). Cycle time uses ``max`` of modality
+    ``surface_code_cycle_time`` and ``classical_control_reaction_time``, plus optional QEC
+    ``qec_decode_latency_microseconds`` and ``qec_measurement_round_time_microseconds`` when present.
+    """
+    phenomenological_model_applies = read_heuristic_phenomenological_logical_error_model_applies(
+        scenario, warnings
+    )
+
+    p_phys: float | None = physical_gate_error_rate_effective
+    if p_phys is None:
+        p_phys = read_modality_characteristic_gate_error(modality, warnings, context="paths.modality")
+
+    p_nominal_for_inputs = read_modality_characteristic_gate_error(modality, warnings, context="paths.modality")
+
+    p_th = read_parameter_entry_float_default(
+        qec.get("heuristic_surface_code_physical_threshold_order_of_magnitude"),
+        0.01,
+        warnings,
+        context="paths.qec",
+        param_name="heuristic_surface_code_physical_threshold_order_of_magnitude",
+    )
+    pref_a = read_parameter_entry_float_default(
+        qec.get("heuristic_logical_error_prefactor"),
+        0.05,
+        warnings,
+        context="paths.qec",
+        param_name="heuristic_logical_error_prefactor",
+    )
+
+    pl: float | None = None
+    exponent_half_distance: int | None = None
+    if not phenomenological_model_applies:
+        warnings.append(
+            "logical_fault_model: scenario.qec.heuristic_phenomenological_logical_error_model_applies is false; "
+            "phenomenological logical_error_rate_per_cycle omitted by assumption."
+        )
+    elif distance_d is not None and int(distance_d) > 0 and p_phys is not None:
+        d_int = int(distance_d)
+        exponent_half_distance = (d_int + 1) // 2
+        if p_phys >= p_th:
+            warnings.append(
+                "logical_fault_model: effective physical_gate_error_rate >= "
+                "heuristic_surface_code_physical_threshold_order_of_magnitude; phenomenological "
+                "logical_error_rate_per_cycle omitted (model assumes p_phys < p_th)."
+            )
+        else:
+            pl = phenomenological_logical_error_per_cycle(
+                d_int,
+                physical_gate_error_rate=p_phys,
+                phenomenological_p_th=p_th,
+                phenomenological_prefactor=pref_a,
+            )
+
+    cycle_us = read_positive_parameter_microseconds(
+        modality, "surface_code_cycle_time", warnings, context="paths.modality"
+    )
+    reaction_us = read_positive_parameter_microseconds(
+        modality, "classical_control_reaction_time", warnings, context="paths.modality"
+    )
+    decode_us = read_positive_parameter_microseconds(
+        qec, "qec_decode_latency_microseconds", warnings, context="paths.qec"
+    )
+    measure_us = read_positive_parameter_microseconds(
+        qec, "qec_measurement_round_time_microseconds", warnings, context="paths.qec"
+    )
+
+    named_vals: list[tuple[str, float]] = []
+    if cycle_us is not None:
+        named_vals.append(("surface_code_cycle_time_microseconds", cycle_us))
+    if reaction_us is not None:
+        named_vals.append(("classical_control_reaction_time_microseconds", reaction_us))
+    if decode_us is not None:
+        named_vals.append(("qec_decode_latency_microseconds", decode_us))
+    if measure_us is not None:
+        named_vals.append(("qec_measurement_round_time_microseconds", measure_us))
+
+    tau_us: float | None = None
+    if named_vals:
+        tau_us = max(v for _, v in named_vals)
+        warnings.append(
+            "logical_fault_model.logical_cycle_time_microseconds is max(available components); "
+            "not a compiled schedule. Add qec_decode_latency_microseconds / "
+            "qec_measurement_round_time_microseconds on QEC YAML when pinning OSRE τ_cycle pieces."
+        )
+
+    if pl is not None:
+        warnings.append(
+            "logical_fault_model.logical_error_rate_per_cycle is a phenomenological proxy "
+            "A·(p/p_th)^ceil((d+1)/2), not a paper-calibrated logical channel."
+        )
+
+    if not phenomenological_model_applies:
+        status = "model_disabled_by_assumption"
+    elif pl is not None and tau_us is not None:
+        status = "computed"
+    elif pl is not None or tau_us is not None:
+        status = "partial"
+    else:
+        status = "insufficient_inputs"
+
+    components_map: dict[str, float | None] = {
+        "surface_code_cycle_time_microseconds": cycle_us,
+        "classical_control_reaction_time_microseconds": reaction_us,
+        "qec_decode_latency_microseconds": decode_us,
+        "qec_measurement_round_time_microseconds": measure_us,
+    }
+
+    inputs: dict[str, Any] = {
+        "code_distance_d": distance_d,
+        "physical_gate_error_rate": p_phys,
+        "physical_gate_error_rate_nominal": p_nominal_for_inputs,
+        "heuristic_threshold_p_th": p_th,
+        "heuristic_prefactor_a": pref_a,
+        "phenomenological_model_applies": phenomenological_model_applies,
+    }
+    if physical_error_stack is not None:
+        for key in (
+            "p_nominal",
+            "p_nominal_gate_proxy_method",
+            "characteristic_physical_gate_error_rate",
+            "qcvv_multiplier_sigma",
+            "scaling_penalty_log_coefficient_alpha",
+            "scaling_penalty_linear_coefficient_beta",
+            "scaling_reference_physical_qubits",
+            "scaling_penalty_factor",
+            "p_effective",
+        ):
+            if key in physical_error_stack:
+                inputs[key] = physical_error_stack[key]
+
+    inputs["ver_grounded_on_characteristic_only"] = VER_USES_HEADLINE_CHARACTERISTIC_FOR_VER
+
+    return {
+        "schema": "logical_fault_model_v1",
+        "status": status,
+        "logical_error_rate_per_cycle": pl,
+        "logical_error_model": "phenomenological_prefactor_times_p_over_pth_to_half_distance",
+        "exponent_half_distance": exponent_half_distance,
+        "inputs": inputs,
+        "logical_cycle_time": {
+            "logical_cycle_time_microseconds": tau_us,
+            "components_microseconds": components_map,
+            "provenance": "max_of_available_modality_and_optional_qec_latency_v1",
+        },
+    }
+
+
+_SENSITIVITY_REL_EPS = 1e-5
+
+
+def _build_parameter_sensitivity_block(
+    *,
+    scenario: Mapping[str, Any],
+    qec: Mapping[str, Any],
+    evaluated: Mapping[str, Any],
+    qec_distance_resolution: Mapping[str, Any],
+    physical_stack: Mapping[str, Any],
+    naive_serial_timing: Mapping[str, Any] | None,
+    warnings: list[str],
+) -> dict[str, Any]:
+    """
+    Local OSRE-style sensitivities: symmetric relative finite differences on heuristic ``d`` and naive serial time.
+
+    Controlled by ``qec.emit_parameter_sensitivity`` (default: emit when inputs exist). Uses the same
+    phenomenological union-bound driver as :func:`square.report_distance.resolve_code_distance_full`.
+    """
+    _raw = scenario.get("qec")
+    qec_block: dict[str, Any] = _raw if isinstance(_raw, dict) else {}
+    if qec_block.get("emit_parameter_sensitivity") is False:
+        return {
+            "schema": "parameter_sensitivity_v1",
+            "status": "skipped",
+            "method": None,
+            "relative_perturbation": None,
+            "rows": [],
+            "notes": ["parameter_sensitivity skipped: qec.emit_parameter_sensitivity is false."],
+        }
+
+    mode = str(qec_distance_resolution.get("mode") or "")
+    d0_any = qec_distance_resolution.get("distance_d")
+    p0_raw = physical_stack.get("p_effective")
+    if mode != "heuristic_union_bound" or d0_any is None or p0_raw is None:
+        return {
+            "schema": "parameter_sensitivity_v1",
+            "status": "insufficient_inputs",
+            "method": "symmetric_relative_finite_difference",
+            "relative_perturbation": _SENSITIVITY_REL_EPS,
+            "rows": [],
+            "notes": [
+                "Local sensitivity needs heuristic_union_bound with resolved distance_d and p_effective."
+            ],
+        }
+
+    d0 = int(d0_any)
+    p0 = float(p0_raw)
+
+    lq_val = read_evaluated_metric_float(
+        evaluated,
+        "abstract_logical_qubits",
+        warnings,
+        context="parameter_sensitivity",
+    )
+    dp_val = read_evaluated_metric_float(
+        evaluated,
+        "abstract_measurement_depth_layers",
+        warnings,
+        context="parameter_sensitivity",
+    )
+    if lq_val is None or dp_val is None:
+        return {
+            "schema": "parameter_sensitivity_v1",
+            "status": "insufficient_inputs",
+            "method": "symmetric_relative_finite_difference",
+            "relative_perturbation": _SENSITIVITY_REL_EPS,
+            "rows": [],
+            "notes": ["Local sensitivity needs evaluated abstract_logical_qubits and abstract_measurement_depth_layers."],
+        }
+
+    hu = read_heuristic_union_bound_inputs(
+        qec, qec_block, warnings, budget_warning_context="parameter_sensitivity"
+    )
+
+    def _d_at(*, p_eff: float, p_th_use: float) -> int:
+        d_out, _ = suggest_union_bound_code_distance(
+            physical_gate_error_rate=p_eff,
+            logical_qubit_count=lq_val,
+            qec_cycle_count_proxy=dp_val,
+            logical_error_budget=hu.logical_error_budget,
+            phenomenological_p_th=p_th_use,
+            phenomenological_prefactor=hu.phenomenological_prefactor,
+            min_d=hu.min_d,
+            max_d=hu.max_d,
+            use_discrete_scan=hu.use_discrete_scan,
+        )
+        return int(d_out)
+
+    eps = _SENSITIVITY_REL_EPS
+    d_p_up = _d_at(p_eff=p0 * (1.0 + eps), p_th_use=hu.phenomenological_p_th)
+    d_p_down = _d_at(p_eff=p0 / (1.0 + eps), p_th_use=hu.phenomenological_p_th)
+    denom_p = 2.0 * p0 * eps
+    d_distance_d_dphys = (float(d_p_up) - float(d_p_down)) / denom_p if denom_p > 0 else None
+
+    d_th_up = _d_at(p_eff=p0, p_th_use=hu.phenomenological_p_th * (1.0 + eps))
+    d_th_down = _d_at(p_eff=p0, p_th_use=hu.phenomenological_p_th / (1.0 + eps))
+    denom_th = 2.0 * hu.phenomenological_p_th * eps
+    d_distance_d_dpth = (float(d_th_up) - float(d_th_down)) / denom_th if denom_th > 0 else None
+
+    rows: list[dict[str, Any]] = [
+        {
+            "parameter": "physical_gate_error_rate_effective",
+            "layer": "derived",
+            "metric": "code_distance_d",
+            "baseline_parameter_value": p0,
+            "baseline_metric_value": float(d0),
+            "derivative_metric_per_parameter": d_distance_d_dphys,
+            "elasticity_metric_times_parameter_over_value": (d_distance_d_dphys * p0 / float(d0))
+            if (d_distance_d_dphys is not None and d0 != 0)
+            else None,
+        },
+        {
+            "parameter": "heuristic_surface_code_physical_threshold_order_of_magnitude",
+            "layer": "qec",
+            "metric": "code_distance_d",
+            "baseline_parameter_value": hu.phenomenological_p_th,
+            "baseline_metric_value": float(d0),
+            "derivative_metric_per_parameter": d_distance_d_dpth,
+            "elasticity_metric_times_parameter_over_value": (d_distance_d_dpth * hu.phenomenological_p_th / float(d0))
+            if (d_distance_d_dpth is not None and d0 != 0)
+            else None,
+        },
+    ]
+
+    if naive_serial_timing is not None:
+        dep = naive_serial_timing.get("abstract_measurement_depth_layers")
+        cyc = naive_serial_timing.get("surface_code_cycle_time_microseconds")
+        nsd = naive_serial_timing.get("serial_time_days")
+        if dep is not None and cyc is not None and nsd is not None:
+            try:
+                dep_f = float(dep)
+                cyc_f = float(cyc)
+                d_serial_d_cycle = dep_f / (1e6 * 86400.0)
+            except (TypeError, ValueError):
+                d_serial_d_cycle = None
+            if d_serial_d_cycle is not None:
+                rows.append(
+                    {
+                        "parameter": "surface_code_cycle_time",
+                        "layer": "modality",
+                        "metric": "naive_serial_time_days",
+                        "baseline_parameter_value": cyc_f,
+                        "baseline_metric_value": float(nsd),
+                        "derivative_metric_per_parameter": d_serial_d_cycle,
+                        "elasticity_metric_times_parameter_over_value": d_serial_d_cycle * cyc_f / float(nsd)
+                        if float(nsd) != 0
+                        else None,
+                    }
+                )
+
+    ranked = sorted(
+        (r for r in rows if r.get("derivative_metric_per_parameter") is not None),
+        key=lambda r: abs(float(r["derivative_metric_per_parameter"])),
+        reverse=True,
+    )
+    ranking = [r["parameter"] for r in ranked]
+
+    notes = [
+        "Finite differences use relative step 1e-5 on effective gate error and threshold; "
+        "code_distance_d is discrete so derivatives are secants between perturbed optima.",
+        f"scaling_reference_physical_qubits for penalty: {physical_stack.get('scaling_reference_physical_qubits')}",
+    ]
+    warnings.append(
+        "parameter_sensitivity: local finite differences are coarse proxies; use Monte Carlo for global uncertainty."
+    )
+
+    return {
+        "schema": "parameter_sensitivity_v1",
+        "status": "computed",
+        "method": "symmetric_relative_finite_difference",
+        "relative_perturbation": _SENSITIVITY_REL_EPS,
+        "rows": rows,
+        "ranking_by_abs_derivative_code_distance_d": ranking,
+        "notes": notes,
+    }
+
+
 def build_scenario_report(
     bundle: ScenarioBundle,
     *,
     modulus_bits_override: int | None = None,
     code_distance_override: int | None = None,
+    outputs: Literal["full", "mc_metrics"] = "full",
 ) -> dict[str, Any]:
     """
     Assemble a JSON-serializable report dict for the given bundle.
@@ -434,539 +669,267 @@ def build_scenario_report(
     :param bundle: Loaded scenario documents.
     :param modulus_bits_override: If set, use this ``n`` instead of ``target.modulus_bit_length``.
     :param code_distance_override: If set, use this QEC distance ``d`` instead of scenario fields.
+    :param outputs: ``full`` (default) contract report. ``mc_metrics`` returns only ``dashboard`` and
+        ``algorithm_metrics`` (as required by :func:`square.mc.forward_model.extract_default_mc_metrics`) and
+        skips ``layout_optimization``, ``logical_fault_model``, ``system_metrics``, ``parameter_sensitivity``,
+        and the assembled sources/layers shell — but still runs formula evaluation, distance resolution,
+        patch/rollup, timing, and dashboard construction on each call.
     """
     warnings: list[str] = []
     scenario = bundle.scenario
-    target = scenario.get("target") if isinstance(scenario.get("target"), dict) else {}
-    n_raw = modulus_bits_override if modulus_bits_override is not None else target.get("modulus_bit_length")
-    n: int | None
-    if n_raw is None:
-        n = None
-        warnings.append("No modulus_bit_length in scenario target (and no override); formula metrics skipped.")
-    else:
-        try:
-            n = int(n_raw)
-        except (TypeError, ValueError):
-            n = None
-            warnings.append("modulus_bit_length is not an integer; formula metrics skipped.")
-        if n is not None and n <= 0:
-            n = None
-            warnings.append("modulus_bit_length must be positive; formula metrics skipped.")
-
+    table2_block = scenario.get("table2_reference_row")
+    _raw_target = scenario.get("target")
+    target: dict[str, Any] = _raw_target if isinstance(_raw_target, dict) else {}
     algo = bundle.algorithm
-    evaluated: dict[str, Any] = {}
-    evaluated_skipped: list[str] = []
 
-    if n is not None:
-        for src_key, out_key in _FORMULA_METRICS:
-            entry = algo.get(src_key)
-            if not isinstance(entry, dict):
-                evaluated_skipped.append(src_key)
-                continue
-            raw = entry.get("value")
-            if not isinstance(raw, str):
-                evaluated_skipped.append(src_key)
-                continue
-            if "O(" in raw or "O(1)" in raw:
-                evaluated_skipped.append(src_key)
-                continue
-            try:
-                value = eval_numeric_formula(raw, float(n))
-            except (FormulaEvalError, ZeroDivisionError, OverflowError) as exc:
-                warnings.append(f"Could not evaluate {src_key!r}: {exc}")
-                evaluated_skipped.append(src_key)
-                continue
-            evaluated[out_key] = {
-                "value": value,
-                "source_parameter": src_key,
-                "provenance": "computed_from_yaml_formula",
-            }
+    fe = build_formula_evaluation_and_pins(
+        algo,
+        scenario,
+        target,
+        warnings,
+        modulus_bits_override=modulus_bits_override,
+    )
+    evaluated = fe.evaluated
+    evaluated_skipped = fe.evaluated_skipped
+    n = fe.n
+    ecdlp_block_for_metrics = fe.ecdlp_block_for_metrics
+    pinned = fe.pinned
 
-    exp = algo.get("exponent_register_qubits_ne_asymptotic")
-    if isinstance(exp, dict) and isinstance(exp.get("value"), str) and "O(" in str(exp["value"]):
-        evaluated_skipped.append("exponent_register_qubits_ne_asymptotic")
+    early_pins, early_table2_warnings = parse_table2_pins_early(scenario, bundle.magic)
+    warnings.extend(early_table2_warnings)
+    physical_stack = _effective_physical_gate_error_stack(
+        modality=bundle.modality,
+        qcvv_doc=bundle.qcvv,
+        qec=bundle.qec,
+        rsa_phys_millions=early_pins.get("rsa2048_phys"),
+        evaluated=evaluated,
+        warnings=warnings,
+    )
+    p_effective_for_heuristic = physical_stack.get("p_effective")
+    if p_effective_for_heuristic is not None:
+        p_effective_for_heuristic = float(p_effective_for_heuristic)
 
-    pinned = _pinned_algorithm_entries_for_n(algo, n) if n is not None else {}
-    if n is not None:
-        for k, v in _synthetic_pinned_from_table1(algo, n).items():
-            pinned.setdefault(k, v)
-
-    d_resolved, qec_distance_resolution = _resolve_code_distance_full(
+    d_resolved, qec_distance_resolution = resolve_code_distance_full(
         scenario,
         override=code_distance_override,
         modality=bundle.modality,
         qec=bundle.qec,
         evaluated=evaluated,
         warnings=warnings,
+        physical_gate_error_rate_effective=p_effective_for_heuristic,
     )
 
-    patch_entry = bundle.qec.get("logical_qubit_patch_physical_qubit_count_formula")
-    patch_formula: str | None = None
-    if isinstance(patch_entry, dict) and isinstance(patch_entry.get("value"), str):
-        patch_formula = str(patch_entry["value"])
+    patch_formula, patch_physical_per_logical, qec_patch_status, qec_patch_eval_meta = (
+        evaluate_patch_physical_per_logical(bundle.qec, d_resolved, warnings)
+    )
 
-    patch_physical_per_logical: float | None = None
-    qec_patch_status = "no_formula_in_profile"
-    qec_patch_eval_meta: dict[str, Any] | None = None
-
-    if patch_formula:
-        if d_resolved is None:
-            qec_patch_status = "pending_distance_d"
-            warnings.append(
-                "Surface-code patch formula is present but code distance d is not set "
-                "(use scenario qec_code_distance, qec.distance_policy heuristic, or --d); "
-                "physical qubits per logical are not computed."
-            )
-        else:
-            try:
-                patch_physical_per_logical = eval_numeric_formula_with_bindings(
-                    patch_formula, {"d": float(d_resolved)}
-                )
-                qec_patch_status = "evaluated"
-                qec_patch_eval_meta = {
-                    "provenance": "computed_from_yaml_formula",
-                    "source_parameter": "logical_qubit_patch_physical_qubit_count_formula",
-                }
-            except (FormulaEvalError, ZeroDivisionError, OverflowError) as exc:
-                qec_patch_status = "eval_failed"
-                warnings.append(f"Could not evaluate QEC patch formula: {exc}")
-
-    table2_block = scenario.get("table2_reference_row")
-    ccz_count = None
-    if isinstance(table2_block, dict):
-        ccz_count = _parse_ccz_count_from_table2(table2_block.get("value"))
-    if ccz_count is None and isinstance(table2_block, str):
-        ccz_count = _parse_ccz_count_from_table2(table2_block)
-
-    rsa2048_phys: float | None = None
-    phys_key: str | None = None
-    rsa2048_megaqd: float | None = None
-    mega_key: str | None = None
-    rsa2048_wall_days: float | None = None
-    wall_key: str | None = None
-    factory_param_key: str | None = None
-    table2_row_layout_descriptor: str | None = None
-    if ccz_count is not None:
-        row_ref = _table2_dashboard_row_ref(ccz_count)
-        phys_key = mega_key = wall_key = row_ref
-        t2_row = _table2_rsa2048_row_for_ccz(bundle.magic, ccz_count)
-        if t2_row is None:
-            warnings.append(
-                f"No row with ccz_factories={ccz_count} in magic YAML {_TABLE2_RSA2048_ROWS_KEY!r}; "
-                "Table 2 pins omitted."
-            )
-        else:
-            ld = t2_row.get("layout_descriptor")
-            table2_row_layout_descriptor = str(ld) if ld is not None else None
-            factory_param_key = table2_row_layout_descriptor
-            try:
-                rsa2048_phys = float(t2_row["physical_qubits_millions"])
-            except (KeyError, TypeError, ValueError):
-                rsa2048_phys = None
-                warnings.append(
-                    f"Table 2 row {row_ref!r} missing or non-numeric physical_qubits_millions."
-                )
-            rsa2048_megaqd = None
-            try:
-                rsa2048_megaqd = float(t2_row["megaqubit_days"])
-            except (KeyError, TypeError, ValueError):
-                warnings.append(f"Table 2 row {row_ref!r} missing or non-numeric megaqubit_days.")
-            rsa2048_wall_days = None
-            try:
-                rsa2048_wall_days = float(t2_row["wall_clock_days"])
-            except (KeyError, TypeError, ValueError):
-                warnings.append(f"Table 2 row {row_ref!r} missing or non-numeric wall_clock_days.")
-    elif table2_block is not None:
-        warnings.append("Could not parse CCZ factory count from table2_reference_row.value.")
+    ccz_count = early_pins["ccz_count"]
+    rsa2048_phys = early_pins["rsa2048_phys"]
+    phys_key = early_pins["phys_key"]
+    rsa2048_megaqd = early_pins["rsa2048_megaqd"]
+    mega_key = early_pins["mega_key"]
+    rsa2048_wall_days = early_pins["rsa2048_wall_days"]
+    wall_key = early_pins["wall_key"]
+    factory_param_key = early_pins["factory_param_key"]
+    table2_row_layout_descriptor = early_pins["table2_row_layout_descriptor"]
 
     toffoli_b = None
     megaqd = None
     if n is not None:
-        t1 = _table1_pin_row(algo, n)
+        t1 = table1_pin_row(algo, n)
         if t1 is not None:
             raw_tb = t1.get("toffoli_plus_t_halves_billions")
             if raw_tb is not None:
                 try:
                     toffoli_b = float(raw_tb)
                 except (TypeError, ValueError):
-                    pass
+                    warnings.append(
+                        f"paper_table1_pins: toffoli_plus_t_halves_billions for n={n} is not numeric; "
+                        "dashboard toffoli_plus_t_halves_billions_at_n omitted."
+                    )
             raw_mq = t1.get("minimum_spacetime_volume_megaqubit_days")
             if raw_mq is not None:
                 try:
                     megaqd = float(raw_mq)
                 except (TypeError, ValueError):
-                    pass
+                    warnings.append(
+                        f"paper_table1_pins: minimum_spacetime_volume_megaqubit_days for n={n} is not numeric; "
+                        "dashboard minimum_spacetime_volume_megaqubitdays_at_n omitted."
+                    )
 
-    t_fallback_recommended = False
-    t_transition: int | None = None
-    if bundle.magic_aux:
-        trans = bundle.magic_aux.get("modulus_bit_length_ccz_to_t_transition_order_of_magnitude")
-        if isinstance(trans, dict) and trans.get("value") is not None:
-            try:
-                t_transition = int(trans["value"])
-            except (TypeError, ValueError):
-                t_transition = None
-        if n is not None and t_transition is not None and n >= t_transition:
-            t_fallback_recommended = True
-            warnings.append(
-                f"n={n} is at or above the documented CCZ→T factory transition scale (~{t_transition} bits); "
-                "magic_aux flags a different non-Clifford supply model."
-            )
-
-    modality_h, modality_p = _split_document(bundle.modality)
-    qec_h, qec_p = _split_document(bundle.qec)
-    magic_h, magic_p = _split_document(bundle.magic)
-    algo_h, algo_p = _split_document(algo)
-
-    magic_aux_layer = None
-    if bundle.magic_aux is not None:
-        mx_h, mx_p = _split_document(bundle.magic_aux)
-        magic_aux_layer = {"header": mx_h, "parameters": mx_p}
-
-    qcvv_layer = None
-    if bundle.qcvv is not None:
-        qv_h, qv_p = _split_document(bundle.qcvv)
-        qcvv_layer = {"document_id": qv_h.get("document_id"), "header": qv_h, "parameters": qv_p}
-
-    qem_layer = None
-    if bundle.qem is not None:
-        qm_h, qm_p = _split_document(bundle.qem)
-        qem_layer = {"document_id": qm_h.get("document_id"), "header": qm_h, "parameters": qm_p}
-
-    logical_qubits_val: float | None = None
-    abs_lq = evaluated.get("abstract_logical_qubits")
-    if isinstance(abs_lq, dict) and abs_lq.get("value") is not None:
-        try:
-            logical_qubits_val = float(abs_lq["value"])
-        except (TypeError, ValueError):
-            logical_qubits_val = None
-
-    approx_data_physical: float | None = None
-    if logical_qubits_val is not None and patch_physical_per_logical is not None:
-        approx_data_physical = logical_qubits_val * patch_physical_per_logical
-        warnings.append(
-            "approximate_data_plane_physical_qubits = abstract_logical_qubits × physical_qubits_per_logical; "
-            "excludes magic-state factories, routing, classical control footprint, and other non-data overhead."
-        )
-
-    reported_total_physical_qubits: float | None = None
-    if rsa2048_phys is not None:
-        reported_total_physical_qubits = float(rsa2048_phys) * 1e6
-
-    derived_non_data_overhead_physical_qubits: float | None = None
-    if reported_total_physical_qubits is not None and approx_data_physical is not None:
-        derived_non_data_overhead_physical_qubits = max(0.0, reported_total_physical_qubits - approx_data_physical)
-        warnings.append(
-            "derived_non_data_overhead_physical_qubits = Table-2-pinned total qubits minus naive data-plane product; "
-            "attributes remainder to factories, routing, distillation, control, etc. without splitting them."
-        )
-
-    per_ccz_factory_qubits = _magic_float_by_key(bundle.magic, "physical_qubits_per_ccz_factory_approximate")
-    factory_footprint_from_yaml: float | None = None
-    if ccz_count is not None and per_ccz_factory_qubits is not None:
-        factory_footprint_from_yaml = float(ccz_count) * float(per_ccz_factory_qubits)
-
-    layout_estimate: dict[str, Any] = {
-        "approximate_data_plane_physical_qubits": approx_data_physical,
-        "reported_end_to_end_physical_qubits": reported_total_physical_qubits,
-        "derived_non_data_overhead_physical_qubits": derived_non_data_overhead_physical_qubits,
-        "factory_footprint_physical_qubits_from_yaml": factory_footprint_from_yaml,
-        "physical_qubits_per_ccz_factory_approximate_key": "physical_qubits_per_ccz_factory_approximate"
-        if per_ccz_factory_qubits is not None
-        else None,
-        "provenance": "layout_proxy_v1",
-    }
-
-    layout_optimization = _build_layout_optimization_block(
-        scenario=scenario,
-        modality=bundle.modality,
-        qec=bundle.qec,
-        evaluated=evaluated,
-        patch_formula=patch_formula,
-        logical_qubits=logical_qubits_val,
-        selected_d=d_resolved,
-        reported_total_physical_qubits=reported_total_physical_qubits,
-        factory_footprint_physical_qubits=factory_footprint_from_yaml,
+    magic_aux_t_factory_dashboard = evaluate_magic_aux_t_factory_dashboard(
+        bundle.magic_aux,
+        target=target,
+        n=n,
         warnings=warnings,
     )
 
-    naive_serial_timing: dict[str, Any] | None = None
-    depth_layers = evaluated.get("abstract_measurement_depth_layers")
-    cycle_entry = bundle.modality.get("surface_code_cycle_time")
-    if isinstance(depth_layers, dict) and depth_layers.get("value") is not None:
-        try:
-            depth_val = float(depth_layers["value"])
-        except (TypeError, ValueError):
-            depth_val = None
-        if depth_val is not None and isinstance(cycle_entry, dict) and cycle_entry.get("value") is not None:
-            try:
-                cycle_us = float(cycle_entry["value"])
-            except (TypeError, ValueError):
-                cycle_us = None
-            if cycle_us is not None:
-                serial_us = depth_val * cycle_us
-                serial_days = serial_us / (1e6 * 86400.0)
-                naive_serial_timing = {
-                    "abstract_measurement_depth_layers": depth_val,
-                    "surface_code_cycle_time_microseconds": cycle_us,
-                    "serial_time_microseconds": serial_us,
-                    "serial_time_days": serial_days,
-                    "provenance": "computed_from_measurement_depth_times_surface_cycle",
-                    "source_parameters": {
-                        "depth": "abstract_measurement_depth_formula",
-                        "cycle": "surface_code_cycle_time",
-                    },
-                }
-                warnings.append(
-                    "naive_serial_time_days = abstract_measurement_depth_layers × surface_code_cycle_time; "
-                    "assumes one code cycle per abstract layer, no parallelism, no reaction/distillation limits — "
-                    "not comparable to Table 2 wall-clock without the paper’s full schedule."
-                )
+    phys = build_physical_rollup_and_layout_estimate(
+        magic=bundle.magic,
+        evaluated=evaluated,
+        early_pins=early_pins,
+        d_resolved=d_resolved,
+        patch_physical_per_logical=patch_physical_per_logical,
+        qec_patch_status=qec_patch_status,
+        warnings=warnings,
+    )
+    logical_qubits_val = phys.logical_qubits_val
+    approx_data_physical = phys.approx_data_physical
+    reported_total_physical_qubits = phys.reported_total_physical_qubits
+    derived_non_data_overhead_physical_qubits = phys.derived_non_data_overhead_physical_qubits
+    factory_footprint_from_yaml = phys.factory_footprint_from_yaml
+    layout_estimate = phys.layout_estimate
+    physical_rollup = phys.physical_rollup
 
-    table2_row_text: str | None = None
-    if isinstance(table2_block, dict) and table2_block.get("value") is not None:
-        table2_row_text = str(table2_block.get("value"))
-    schedule_model_v1: dict[str, Any] | None = None
-    schedule_calibration: dict[str, Any] | None = None
-    reaction_entry = bundle.modality.get("classical_control_reaction_time")
-    reaction_us: float | None = None
-    if isinstance(reaction_entry, dict) and reaction_entry.get("value") is not None:
-        try:
-            reaction_us = float(reaction_entry["value"])
-        except (TypeError, ValueError):
-            reaction_us = None
+    if outputs == "full":
+        layout_optimization = _build_layout_optimization_block(
+            scenario=scenario,
+            modality=bundle.modality,
+            qec=bundle.qec,
+            evaluated=evaluated,
+            patch_formula=patch_formula,
+            logical_qubits=logical_qubits_val,
+            selected_d=d_resolved,
+            reported_total_physical_qubits=reported_total_physical_qubits,
+            factory_footprint_physical_qubits=factory_footprint_from_yaml,
+            warnings=warnings,
+            physical_gate_error_rate_effective=p_effective_for_heuristic,
+        )
+    else:
+        layout_optimization = None
 
-    if (
-        isinstance(depth_layers, dict)
-        and depth_layers.get("value") is not None
-        and isinstance(cycle_entry, dict)
-        and cycle_entry.get("value") is not None
-        and reaction_us is not None
-        and ccz_count is not None
-    ):
-        try:
-            depth_val_s = float(depth_layers["value"])
-            cycle_us_s = float(cycle_entry["value"])
-        except (TypeError, ValueError):
-            depth_val_s = None
-            cycle_us_s = None
-        if depth_val_s is not None and cycle_us_s is not None:
-            rlim, rsrc = infer_reaction_limited_from_scenario(
-                scenario,
-                table2_row_value=table2_row_text,
-                factory_parameter_key=factory_param_key,
-            )
-            schedule_model_v1 = build_parallel_depth_schedule_v1(
-                abstract_measurement_depth_layers=depth_val_s,
-                surface_code_cycle_microseconds=cycle_us_s,
-                classical_reaction_microseconds=reaction_us,
-                ccz_factory_count=int(ccz_count),
-                reaction_limited=rlim,
-            )
-            schedule_model_v1["reaction_limited_inferred_from"] = rsrc
-            warnings.append(
-                "schedule_model_v1 uses depth/(CCZ factories) with an effective layer time; "
-                "it is a coarse bound, not the paper’s compiled schedule."
-            )
-            if naive_serial_timing and naive_serial_timing.get("serial_time_days") is not None:
-                naive_d = float(naive_serial_timing["serial_time_days"])
-                model_d = float(schedule_model_v1["wall_clock_days"])
-                schedule_calibration = {
-                    "naive_serial_time_days": naive_d,
-                    "schedule_model_v1_wall_clock_days": model_d,
-                    "ratio_naive_serial_over_model_v1": naive_d / model_d if model_d > 0 else None,
-                    "provenance": "ratio_of_estimates",
-                }
-            if rsa2048_wall_days is not None and schedule_model_v1.get("wall_clock_days") is not None:
-                pinned_d = float(rsa2048_wall_days)
-                model_d2 = float(schedule_model_v1["wall_clock_days"])
-                schedule_calibration = schedule_calibration or {}
-                schedule_calibration.update(
-                    {
-                        "table2_pinned_wall_clock_days": pinned_d,
-                        "ratio_table2_pinned_over_model_v1": pinned_d / model_d2 if model_d2 > 0 else None,
-                    }
-                )
+    timing_out = build_timing_section(
+        evaluated=evaluated,
+        modality=bundle.modality,
+        scenario=scenario,
+        table2_block=table2_block,
+        table2_rsa2048_rows_key=TABLE2_RSA2048_ROWS_KEY,
+        ecdlp_block_for_metrics=ecdlp_block_for_metrics,
+        early_pins=early_pins,
+        warnings=warnings,
+    )
+    timing_block = timing_out.timing_block
+    naive_serial_timing = timing_out.naive_serial_timing
+    schedule_model_v1 = timing_out.schedule_model_v1
+    schedule_calibration = timing_out.schedule_calibration
 
-    reported_table2_timing: dict[str, Any] | None = None
-    if ccz_count is not None:
-        reported_table2_timing = {
-            "ccz_factory_count": ccz_count,
-            "physical_qubits_millions": rsa2048_phys,
-            "physical_qubits_millions_key": phys_key,
-            "megaqubit_days": rsa2048_megaqd,
-            "megaqubit_days_key": mega_key if rsa2048_megaqd is not None else None,
-            "wall_clock_days": rsa2048_wall_days,
-            "wall_clock_days_key": wall_key if rsa2048_wall_days is not None else None,
-            "source_parameter": _TABLE2_RSA2048_ROWS_KEY,
-            "layout_descriptor": table2_row_layout_descriptor,
-            "provenance": "pinned_in_magic_yaml_table2",
+    algo_metrics = _algorithm_metrics_block(
+        n=n,
+        evaluated=evaluated,
+        evaluated_skipped=evaluated_skipped,
+        pinned=pinned,
+        ecdlp_block=ecdlp_block_for_metrics,
+    )
+
+    lfm = _build_logical_fault_model_block(
+        scenario=scenario,
+        distance_d=d_resolved,
+        modality=bundle.modality,
+        qec=bundle.qec,
+        warnings=warnings,
+        physical_gate_error_rate_effective=p_effective_for_heuristic,
+        physical_error_stack=physical_stack,
+    )
+
+    dashboard = build_dashboard_fields(
+        ccz_count=ccz_count,
+        factory_param_key=factory_param_key,
+        table2_pinned_source_parameter=TABLE2_RSA2048_ROWS_KEY if ccz_count is not None else None,
+        table2_row_layout_descriptor=table2_row_layout_descriptor,
+        phys_key=phys_key,
+        rsa2048_phys=rsa2048_phys,
+        mega_key=mega_key,
+        rsa2048_megaqd=rsa2048_megaqd,
+        wall_key=wall_key,
+        rsa2048_wall_days=rsa2048_wall_days,
+        naive_serial_timing=naive_serial_timing,
+        evaluated=evaluated,
+        toffoli_b=toffoli_b,
+        megaqd=megaqd,
+        patch_physical_per_logical=patch_physical_per_logical,
+        approx_data_physical=approx_data_physical,
+        magic_aux_t_factory_dashboard=magic_aux_t_factory_dashboard,
+        d_resolved=d_resolved,
+        qec_distance_resolution_mode=qec_distance_resolution.get("mode"),
+        derived_non_data_overhead_physical_qubits=derived_non_data_overhead_physical_qubits,
+        factory_footprint_from_yaml=factory_footprint_from_yaml,
+        schedule_model_v1=schedule_model_v1,
+        schedule_calibration=schedule_calibration,
+        ecdlp_block_for_metrics=ecdlp_block_for_metrics,
+        logical_fault_model=lfm,
+        warnings=warnings,
+        magic=bundle.magic,
+    )
+
+    if outputs == "mc_metrics":
+        return {"dashboard": dashboard, "algorithm_metrics": algo_metrics}
+    system_metrics_block = build_system_metrics_block(
+        scenario=scenario,
+        modality=bundle.modality,
+        qcvv_doc=bundle.qcvv,
+        qem_doc=bundle.qem,
+        reported_total_physical_qubits=reported_total_physical_qubits,
+        factory_footprint_physical_qubits=factory_footprint_from_yaml,
+        patch_physical_per_logical=patch_physical_per_logical,
+        logical_fault_model=lfm,
+        evaluated=evaluated,
+        schedule_model_v1=schedule_model_v1,
+        ccz_factory_count=ccz_count,
+        warnings=warnings,
+    )
+
+    parameter_sensitivity_block = _build_parameter_sensitivity_block(
+        scenario=scenario,
+        qec=bundle.qec,
+        evaluated=evaluated,
+        qec_distance_resolution=qec_distance_resolution,
+        physical_stack=physical_stack,
+        naive_serial_timing=naive_serial_timing,
+        warnings=warnings,
+    )
+
+    sl = build_report_sources_and_layers(bundle, algo)
+
+    qec_overhead = {
+        "logical_qubit_patch_physical_qubit_count": {
+            "formula": patch_formula,
+            "distance_d": d_resolved,
+            "physical_qubits_per_logical": patch_physical_per_logical,
+            "status": qec_patch_status,
+            **(qec_patch_eval_meta or {}),
         }
-
-    timing_block: dict[str, Any] = {
-        "reported_table2_pinned": reported_table2_timing,
-        "naive_serial_from_measurement_depth": naive_serial_timing,
-        "schedule_model_v1": schedule_model_v1,
-        "schedule_calibration": schedule_calibration,
     }
 
-    physical_rollup: dict[str, Any] = {
-        "code_distance_d": d_resolved,
-        "physical_qubits_per_logical": patch_physical_per_logical,
-        "abstract_logical_qubits_at_n": logical_qubits_val,
-        "approximate_data_plane_physical_qubits": approx_data_physical,
-        "patch_formula_status": qec_patch_status,
-    }
-
-    report: dict[str, Any] = {
-        "report_contract_version": _REPORT_CONTRACT_VERSION,
-        "engine": {"name": "square", "version": _engine_version()},
-        "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-        "warnings": warnings,
-        "scenario": _scenario_public_dict(scenario),
-        "target": dict(target) if isinstance(target, dict) else {},
-        "table2_reference": table2_block if isinstance(table2_block, dict) else None,
-        "sources": {
-            "modality": _source_header(bundle.modality),
-            "qec": _source_header(bundle.qec),
-            "magic": _source_header(bundle.magic),
-            "algorithm": _source_header(algo),
-            "magic_aux": _source_header(bundle.magic_aux) if bundle.magic_aux else None,
-            "qcvv": _source_header(bundle.qcvv) if bundle.qcvv else None,
-            "qem": _source_header(bundle.qem) if bundle.qem else None,
-        },
-        "layers": {
-            "modality": {"document_id": modality_h.get("document_id"), "header": modality_h, "parameters": modality_p},
-            "qec": {"document_id": qec_h.get("document_id"), "header": qec_h, "parameters": qec_p},
-            "magic": {"document_id": magic_h.get("document_id"), "header": magic_h, "parameters": magic_p},
-            "magic_aux": magic_aux_layer,
-            "qcvv": qcvv_layer,
-            "qem": qem_layer,
-            "algorithm": {"document_id": algo_h.get("document_id"), "header": algo_h, "parameters": algo_p},
-        },
-        "algorithm_metrics": {
-            "n": n,
-            "evaluated": evaluated,
-            "evaluated_skipped": evaluated_skipped,
-            "pinned_in_algorithm_yaml": pinned,
-        },
-        "qec_overhead": {
-            "logical_qubit_patch_physical_qubit_count": {
-                "formula": patch_formula,
-                "distance_d": d_resolved,
-                "physical_qubits_per_logical": patch_physical_per_logical,
-                "status": qec_patch_status,
-                **(qec_patch_eval_meta or {}),
-            }
-        },
-        "physical_rollup": physical_rollup,
-        "qec_distance_resolution": qec_distance_resolution,
-        "layout_estimate": layout_estimate,
-        "layout_optimization": layout_optimization,
-        "timing": timing_block,
-        "dashboard": {
-            "ccz_factory_count": ccz_count,
-            "ccz_factory_parameter_key": factory_param_key,
-            "table2_pinned_source_parameter": _TABLE2_RSA2048_ROWS_KEY if ccz_count is not None else None,
-            "table2_pinned_row_layout_descriptor": table2_row_layout_descriptor,
-            "rsa_2048_reported_physical_qubits_millions_key": phys_key,
-            "reported_rsa2048_physical_qubits_millions": rsa2048_phys,
-            "rsa_2048_reported_megaqubit_days_key": mega_key,
-            "reported_rsa2048_megaqubit_days": rsa2048_megaqd,
-            "rsa_2048_reported_wall_clock_days_key": wall_key,
-            "reported_rsa2048_wall_clock_days": rsa2048_wall_days,
-            "naive_serial_time_days_from_depth_times_cycle": naive_serial_timing["serial_time_days"]
-            if naive_serial_timing
-            else None,
-            "logical_qubits_at_n": evaluated.get("abstract_logical_qubits", {}).get("value")
-            if isinstance(evaluated.get("abstract_logical_qubits"), dict)
-            else None,
-            "toffoli_plus_t_halves_billions_at_n": toffoli_b,
-            "minimum_spacetime_volume_megaqubitdays_at_n": megaqd,
-            "logical_qubit_physical_qubits_if_distance_d": patch_physical_per_logical,
-            "approximate_data_plane_physical_qubits": approx_data_physical,
-            "t_factory_fallback_recommended": t_fallback_recommended,
-            "t_factory_transition_modulus_bits_order_of_magnitude": t_transition,
-            "code_distance_d": d_resolved,
-            "qec_distance_resolution_mode": qec_distance_resolution.get("mode"),
-            "derived_non_data_overhead_physical_qubits": derived_non_data_overhead_physical_qubits,
-            "factory_footprint_physical_qubits_from_yaml": factory_footprint_from_yaml,
-            "schedule_model_v1_wall_clock_days": schedule_model_v1.get("wall_clock_days")
-            if schedule_model_v1
-            else None,
-            "schedule_calibration_ratio_table2_over_model_v1": schedule_calibration.get(
-                "ratio_table2_pinned_over_model_v1"
-            )
-            if schedule_calibration
-            else None,
-        },
-    }
-
-    return report
-
-
-def report_to_markdown(report: Mapping[str, Any]) -> str:
-    """
-    Render a short Markdown summary of a report (JSON remains canonical).
-
-    :param report: Output of :func:`build_scenario_report`.
-    """
-    lines: list[str] = []
-    lines.append("# SQuaRE scenario report\n")
-    eng = report.get("engine", {})
-    lines.append(
-        f"**Contract** v{report.get('report_contract_version')} · **Engine** {eng.get('name')} {eng.get('version')}\n"
+    return assemble_report_shell(
+        report_contract_version=_REPORT_CONTRACT_VERSION,
+        warnings=warnings,
+        scenario=dict(scenario),
+        target=dict(target) if isinstance(target, dict) else {},
+        table2_reference=table2_block if isinstance(table2_block, dict) else None,
+        sources=sl.sources,
+        layers=sl.layers,
+        algorithm_metrics=algo_metrics,
+        qec_overhead=qec_overhead,
+        logical_fault_model=lfm,
+        physical_rollup=physical_rollup,
+        physical_layer=_build_physical_layer_snapshot(
+            sl.modality_parameters,
+            document_id=sl.modality_header.get("document_id"),
+        ),
+        system_metrics=system_metrics_block,
+        parameter_sensitivity=parameter_sensitivity_block,
+        qec_distance_resolution=qec_distance_resolution,
+        layout_estimate=layout_estimate,
+        layout_optimization=layout_optimization,
+        timing=timing_block,
+        dashboard=dashboard,
     )
-    lines.append(f"**Generated** {report.get('generated_at')}\n")
-    scen = report.get("scenario", {})
-    lines.append(f"**Scenario** `{scen.get('scenario')}` (schema {scen.get('schema_version')})\n")
 
-    tgt = report.get("target", {})
-    if tgt:
-        lines.append(f"**Target** modulus bits **{tgt.get('modulus_bit_length')}**, problem `{tgt.get('problem')}`\n")
 
-    dash = report.get("dashboard", {})
-    lines.append("## Headlines\n")
-    lines.append(f"- **n (evaluation):** {report.get('algorithm_metrics', {}).get('n')}\n")
-    lines.append(f"- **Abstract logical qubits (evaluated):** {dash.get('logical_qubits_at_n')}\n")
-    lines.append(f"- **CCZ factories (from scenario row):** {dash.get('ccz_factory_count')}\n")
-    lines.append(f"- **Reported RSA-2048 physical qubits (M):** {dash.get('reported_rsa2048_physical_qubits_millions')}\n")
-    lines.append(f"- **Toffoli+T/2 (billions) at n:** {dash.get('toffoli_plus_t_halves_billions_at_n')}\n")
-    lines.append(f"- **Min. spacetime volume (megaqubit-days) at n:** {dash.get('minimum_spacetime_volume_megaqubitdays_at_n')}\n")
-    lines.append(
-        f"- **Table 2 pinned (RSA-2048, inferred CCZ): megaqubit-days:** {dash.get('reported_rsa2048_megaqubit_days')}, "
-        f"**wall-clock days:** {dash.get('reported_rsa2048_wall_clock_days')}\n"
-    )
-    lines.append(
-        f"- **Naive serial time (depth × surface cycle, not Table 2 wall-clock):** "
-        f"{dash.get('naive_serial_time_days_from_depth_times_cycle')} days\n"
-    )
-    lines.append(f"- **Code distance d (resolved):** {dash.get('code_distance_d')} (`{dash.get('qec_distance_resolution_mode')}`)\n")
-    lines.append(f"- **Physical qubits / logical (at d):** {dash.get('logical_qubit_physical_qubits_if_distance_d')}\n")
-    lines.append(f"- **Approx. data-plane physical qubits (logical × patch):** {dash.get('approximate_data_plane_physical_qubits')}\n")
-    lines.append(
-        f"- **Derived non-data overhead (pinned total − data plane):** {dash.get('derived_non_data_overhead_physical_qubits')}\n"
-    )
-    lines.append(
-        f"- **Factory footprint from YAML (count × per-factory):** {dash.get('factory_footprint_physical_qubits_from_yaml')}\n"
-    )
-    lines.append(f"- **Schedule model v1 wall-clock (days):** {dash.get('schedule_model_v1_wall_clock_days')}\n")
-    lines.append(
-        f"- **Table2 / schedule_model_v1 ratio:** {dash.get('schedule_calibration_ratio_table2_over_model_v1')}\n"
-    )
-    lines.append(f"- **T-factory fallback flagged:** {dash.get('t_factory_fallback_recommended')}\n")
-
-    warns = report.get("warnings") or []
-    if warns:
-        lines.append("\n## Warnings\n")
-        for w in warns:
-            lines.append(f"- {w}\n")
-
-    lines.append("\n## Sources (document_id)\n")
-    src = report.get("sources", {})
-    for layer, block in src.items():
-        if isinstance(block, dict) and block.get("document_id"):
-            lines.append(f"- **{layer}:** `{block.get('document_id')}`\n")
-
-    lines.append("\n*Full detail: emit JSON (`square-report` without `--markdown`).*\n")
-    return "".join(lines)
+__all__ = [
+    "OSRE_EXTENDED_PHYSICAL_PARAMETER_KEYS",
+    "OSRE_OPTIONAL_PHYSICAL_RICHNESS_KEYS",
+    "REPORT_CONTRACT_VERSION",
+    "build_scenario_report",
+    "report_to_markdown",
+]

@@ -4,6 +4,7 @@ scenario: rsa2048_gidney_ekera_2021_parallel
 description: >-
   RSA-2048 factoring resource estimate baseline matching Table 2 row “(ours) 2019 (parallel)”:
   28 CCZ factories, reaction-limited carry runways, 0.1% gate error, 1 µs cycle, 10 µs reaction.
+  Identity QCVV/QEM paths (σ=s=Γ=1) populate VER and mitigated ceiling without changing heuristics.
 
 target:
   modulus_bit_length: 2048
@@ -24,3 +25,5 @@ paths:
   magic: Assumptions/MagicStateProduction/ccz_factory_gidney_ekera_2021.yaml
   magic_aux: Assumptions/MagicStateProduction/t_factory_fallback_gidney_ekera_2021.yaml
   algorithm: Algorithms/shor_rsa_gidney_ekera_2021.yaml
+  qcvv: Assumptions/QCVV/identity_no_overhead.yaml
+  qem: Assumptions/QEM/identity_no_overhead.yaml

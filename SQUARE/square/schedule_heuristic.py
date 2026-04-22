@@ -6,7 +6,8 @@ These models are intentionally crude; see report warnings and output contract no
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 
 def infer_reaction_limited_from_scenario(

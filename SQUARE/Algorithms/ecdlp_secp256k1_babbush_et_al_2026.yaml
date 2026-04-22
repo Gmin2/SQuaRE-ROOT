@@ -58,6 +58,21 @@ ecdlp_logical_resource_envelopes_secp256k1:
     must map Toffoli budgets to logical depth / magic consumption using an explicit convention.
   layer: algorithm
 
+# II.1 — Toffoli → abstract measurement depth (union-bound + naive timing proxy).
+# One abstract “layer” per Toffoli gate by default (multiplier 1.0). Reports multiply
+# ``toffoli_gates_upper_bound`` by this factor to obtain ``abstract_measurement_depth_layers``.
+ecdlp_measurement_depth_layers_per_toffoli_gate:
+  value: 1.0
+  unit: "abstract_measurement_layers_per_toffoli_gate"
+  confidence: estimated
+  source: "SQuaRE ECDLP report convention (documented default; tune with paper-specific scheduling when known)"
+  date: "2026-04-15"
+  section: "SQuaRE"
+  notes: >
+    Phenomenological union-bound heuristic and naive_serial_time use this depth proxy; it is not a
+    compiled circuit schedule. Set to 1.0 so each Toffoli contributes one layer to the depth product.
+  layer: algorithm
+
 headline_superconducting_physical_qubits_upper_bound:
   value: 500000
   unit: "physical_qubits_narrative_upper_bound"

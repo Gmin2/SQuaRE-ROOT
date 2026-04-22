@@ -55,3 +55,110 @@ platform_class:
   date: "2021-04-15"
   section: "Abstract"
   layer: physical
+
+# --- Extended native physical layer (OSRE memo alignment; optional in all modalities) ---
+# Not all quantities are pinned in Table 2; entries below extend transparency for QCVV/stack modeling.
+# Report exposes a curated `physical_layer` snapshot when these keys are present (see docs/output-contract.md).
+
+coherence_time_t1_microseconds:
+  value: 80.0
+  unit: "microseconds"
+  confidence: speculative
+  source: "Order-of-magnitude superconducting coherence literature; not a Table 2 column in Gidney & Ekerå 2021"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  notes: Replace with device-calibrated T1 when tying to QCVV.
+  layer: physical
+
+coherence_time_t2_microseconds:
+  value: 60.0
+  unit: "microseconds"
+  confidence: speculative
+  source: "Order-of-magnitude proxy; Gidney & Ekerå 2021 Table 2 does not list T2 separately"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+single_qubit_gate_error_rate:
+  value: 0.0006
+  unit: "error_probability_per_gate"
+  confidence: speculative
+  source: "Illustrative ratio vs headline two-qubit error; refine from calibration stack"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+two_qubit_gate_error_rate:
+  value: 0.001
+  unit: "error_probability_per_gate"
+  confidence: estimated
+  source: "Gidney & Ekerå, Quantum 2021 (Table 2, 0.1% headline physical error)"
+  date: "2021-04-15"
+  section: "Table 2"
+  notes: Matches characteristic_physical_gate_error_rate for the Table 2 “(ours) 2019” row intent.
+  layer: physical
+
+measurement_error_rate:
+  value: 0.005
+  unit: "error_probability_per_shot"
+  confidence: speculative
+  source: "Typical order-of-magnitude readout error for resource models; not pinned in G&E Table 2"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+idle_error_rate_per_cycle:
+  value: 0.0001
+  unit: "error_probability_per_idle_slot_proxy"
+  confidence: speculative
+  source: "Proxy idle error between active gates; refine from control model"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+correlated_noise_parameter:
+  value: 1.0
+  unit: "dimensionless_multiplier"
+  confidence: speculative
+  source: "Baseline 1.0 = no explicit correlated-noise penalty in this Table 2 headline row"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  notes: OSRE memo scaling penalties can replace this multiplier in future YAML.
+  layer: physical
+
+leakage_error_rate:
+  value: 0.00001
+  unit: "error_probability_per_gate_proxy"
+  confidence: speculative
+  source: "Small leakage proxy; not discussed numerically in Gidney & Ekerå 2021 Table 2"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+# --- Optional OSRE richness (transparency only; not used in heuristic p_effective in engine v14) ---
+fabrication_variability_proxy:
+  value: 0.0
+  unit: "dimensionless_order_one"
+  confidence: speculative
+  source: "Placeholder 0 = no extra fabrication spread; OSRE memo variability slot"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+thermal_load_index_proxy:
+  value: 0.0
+  unit: "dimensionless_order_one"
+  confidence: speculative
+  source: "Placeholder 0 = no thermal headroom penalty in this headline row"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical
+
+control_plane_saturation_proxy:
+  value: 0.0
+  unit: "dimensionless_order_one"
+  confidence: speculative
+  source: "Placeholder 0 = no control-plane saturation term in this profile"
+  date: "2026-04-15"
+  section: "SQuaRE OSRE extension"
+  layer: physical

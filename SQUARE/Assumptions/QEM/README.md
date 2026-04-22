@@ -9,3 +9,4 @@ Each file must follow `../Schemas.yaml` (`document_header` + `parameter_entry` p
 | File | Role |
 |------|------|
 | `identity_no_overhead.yaml` | Placeholder: suppression factor 1.0 and shot/readout overhead multipliers of 1.0 |
+| `example_zne_style_stub.yaml` | Illustrative s=0.85, Γ=4 for LOB / mitigated ceiling demos (speculative; not paper-pinned) |

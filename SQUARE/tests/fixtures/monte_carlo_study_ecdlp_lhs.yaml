@@ -1,0 +1,29 @@
+# Latin hypercube study: all parameters must be ``distribution: uniform`` (same ECDLP MVP scenario).
+schema_version: 1
+study_id: mc_ecdlp_lhs_uniform_only
+description: >-
+  LHS variance reduction for three uniform marginals. For log-spaced physical quantities,
+  use ``independent`` sampling with log_uniform per parameter instead.
+
+scope: prior_predictive_only
+
+base_scenario: Configs/ecdlp_secp256k1_babbush_2026_low_toffoli.yaml
+
+sampling:
+  strategy: latin_hypercube
+
+parameters:
+  - parameter_key: characteristic_physical_gate_error_rate
+    distribution: uniform
+    low: 0.0005
+    high: 0.002
+
+  - parameter_key: surface_code_cycle_time
+    distribution: uniform
+    low: 0.5
+    high: 2.0
+
+  - parameter_key: heuristic_surface_code_physical_threshold_order_of_magnitude
+    distribution: uniform
+    low: 0.005
+    high: 0.02
