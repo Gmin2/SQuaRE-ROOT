@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 from square.loader import find_square_root, load_scenario_bundle
-from square.report_dashboard import DASHBOARD_LOGICAL_FAILURE_PROXY_KEY
 from square.plotting import (
     extract_report_plot_frame,
     load_mc_samples_rows_from_csv,
@@ -16,6 +15,7 @@ from square.plotting import (
     write_report_semantics_png,
 )
 from square.report import build_scenario_report
+from square.report_dashboard import DASHBOARD_LOGICAL_FAILURE_PROXY_KEY
 
 
 def test_extract_report_plot_frame_rsa_keys() -> None:

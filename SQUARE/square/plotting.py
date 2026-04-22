@@ -19,8 +19,8 @@ from pathlib import Path
 from typing import Any
 
 from square.mc.forward_model import MC_DASHBOARD_METRIC_FIELDS
-from square.report_dashboard import DASHBOARD_LOGICAL_FAILURE_PROXY_KEY
 from square.mc.overrides import PARAMETER_LAYERS
+from square.report_dashboard import DASHBOARD_LOGICAL_FAILURE_PROXY_KEY
 
 _extra_plot_dash_keys: tuple[str, ...] = (
     "magic_supply_adequate",
