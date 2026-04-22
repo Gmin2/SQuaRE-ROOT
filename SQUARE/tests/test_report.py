@@ -15,6 +15,7 @@ from square.report import (
     build_scenario_report,
     report_to_markdown,
 )
+from square.report_dashboard import DASHBOARD_LOGICAL_FAILURE_PROXY_KEY
 from square.report_system_metrics import VER_USES_HEADLINE_CHARACTERISTIC_FOR_VER
 from square.yaml_numeric import read_qcvv_characterization_error_multiplier
 
@@ -58,8 +59,9 @@ def test_build_report_rsa2048_parallel() -> None:
     assert sm["logical_qubit_capacity_lqc"] == pytest.approx(14585.0)
     assert sm["logical_qubit_capacity_lqc_method"] is not None
     assert sm["quantum_operations_throughput_qot"] == pytest.approx(28.0 / (10.0 * 1e-6))
-    assert sm["validated_error_rate_ver"] is None
-    assert sm["mitigated_operations_ceiling"] is None
+    assert sm["validated_error_rate_ver"] == pytest.approx(0.001)
+    lob_rsa = float(sm["logical_operations_budget_lob"])
+    assert sm["mitigated_operations_ceiling"] == pytest.approx(lob_rsa)
     ps = report["parameter_sensitivity"]
     assert ps["schema"] == "parameter_sensitivity_v1"
     assert ps["status"] == "computed"
@@ -90,11 +92,17 @@ def test_build_report_rsa2048_parallel() -> None:
     assert dash["toffoli_plus_t_halves_billions_at_n"] == pytest.approx(2.7, rel=0.08)
     assert dash["minimum_spacetime_volume_megaqubitdays_at_n"] == pytest.approx(5.9, rel=0.08)
     assert dash["t_factory_fallback_recommended"] is False
+    assert dash["t_factory_magic_aux_applicable_to_target"] is True
+    assert dash["t_factory_transition_modulus_bits_order_of_magnitude"] == 32786
+    assert dash["t_factory_transition_scale_confidence"] == "estimated"
+    assert dash["t_factory_branch_yaml_enabled"] is True
+    assert dash["t_factory_fallback_non_clifford_mechanism"] == "t_distillation_fowler_et_al_style"
+    assert any("CCZ→T transition scale is confidence" in str(w) for w in report["warnings"])
     assert dash["factory_footprint_physical_qubits_from_yaml"] == pytest.approx(28 * 10_000.0)
 
     depth_layers = 500 * 2048**2 + 2048**2 * math.log2(2048)
     p_l_rsa = lf["logical_error_rate_per_cycle"]
-    assert dash["logical_failure_probability_union_depth_proxy"] == pytest.approx(
+    assert dash[DASHBOARD_LOGICAL_FAILURE_PROXY_KEY] == pytest.approx(
         min(1.0, float(depth_layers) * float(p_l_rsa))
     )
     assert sm["logical_operations_budget_lob"] == pytest.approx(0.1 / float(p_l_rsa))
@@ -136,10 +144,12 @@ def test_build_report_rsa2048_parallel() -> None:
 
     assert report["layers"]["magic_aux"] is not None
     assert report["layers"]["magic_aux"]["header"]["document_id"] == "t_factory_fallback_gidney_ekera_2021"
-    assert report["layers"]["qcvv"] is None
-    assert report["layers"]["qem"] is None
-    assert report["sources"]["qcvv"] is None
-    assert report["sources"]["qem"] is None
+    assert report["layers"]["qcvv"] is not None
+    assert report["layers"]["qcvv"]["header"]["document_id"] == "qcvv_identity_no_overhead"
+    assert report["layers"]["qem"] is not None
+    assert report["layers"]["qem"]["header"]["document_id"] == "qem_identity_no_overhead"
+    assert report["sources"]["qcvv"]["document_id"] == "qcvv_identity_no_overhead"
+    assert report["sources"]["qem"]["document_id"] == "qem_identity_no_overhead"
 
     json.dumps(report, allow_nan=False)
     md = report_to_markdown(report)
@@ -192,8 +202,10 @@ def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
     assert sm_ec["logical_operations_budget_lob"] == pytest.approx(0.1 / float(p_l_ec))
     assert sm_ec["headroom_logical_depth"] == pytest.approx(0.1 / float(p_l_ec) - 70_000_000.0)
     assert sm_ec["quantum_operations_throughput_qot"] == pytest.approx(1.0 / (10.0 * 1e-6))
-    assert sm_ec["validated_error_rate_ver"] is None
-    assert sm_ec["mitigated_operations_ceiling"] is None
+    assert sm_ec["validated_error_rate_ver"] == pytest.approx(0.001)
+    lob_ec = sm_ec["logical_operations_budget_lob"]
+    assert lob_ec is not None
+    assert sm_ec["mitigated_operations_ceiling"] == pytest.approx(float(lob_ec))
     assert report["parameter_sensitivity"]["status"] == "computed"
 
     dash = report["dashboard"]
@@ -201,11 +213,15 @@ def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
     assert dash["ecdlp_variant"] == "low_toffoli_variant"
     assert dash["ecdlp_toffoli_gates_upper_bound"] == 70_000_000
     assert dash["ecdlp_paper_headline_physical_qubits_upper_bound"] == 500_000
-    assert dash["logical_failure_probability_union_depth_proxy"] == pytest.approx(
+    assert dash[DASHBOARD_LOGICAL_FAILURE_PROXY_KEY] == pytest.approx(
         min(1.0, 70_000_000.0 * float(p_l_ec))
     )
     assert dash.get("magic_supply_adequate") is None
     assert dash.get("magic_limited_runtime_multiplier") is None
+    assert dash["t_factory_magic_aux_applicable_to_target"] is False
+    assert dash["t_factory_transition_modulus_bits_order_of_magnitude"] is None
+    assert dash["t_factory_fallback_recommended"] is False
+    assert any("magic_aux T-factory transition metadata applies only" in str(x) for x in report["warnings"])
     assert any("dashboard.magic_throughput" in str(x) for x in report["warnings"])
 
     assert report["qec_distance_resolution"]["mode"] == "heuristic_union_bound"
@@ -221,7 +237,7 @@ def test_build_report_ecdlp_secp256k1_babbush_low_toffoli() -> None:
 
 def test_build_report_physical_layer_cain_neutral_atom() -> None:
     root = find_square_root()
-    scenario = root / "Configs" / "ecdlp_secp256k1_cain_2026_neutral_atom_qldpc.yaml"
+    scenario = root / "Configs" / "oratomic_gold_path.yaml"
     bundle = load_scenario_bundle(scenario, root=root)
     report = build_scenario_report(bundle)
     pl = report["physical_layer"]
@@ -249,6 +265,8 @@ def test_oratomic_gold_path_report() -> None:
 
     assert report["layers"]["qec"]["header"]["document_id"] == "qldpc_cain_et_al_2026"
     assert report["layers"]["modality"]["header"]["document_id"] == "neutral_atom_cain_et_al_2026"
+    assert report["layers"]["qcvv"] is not None
+    assert report["layers"]["qem"] is not None
 
     lfm = report["logical_fault_model"]
     assert lfm["status"] == "computed"
@@ -277,9 +295,27 @@ def test_oratomic_gold_path_report() -> None:
 
     assert report["parameter_sensitivity"]["status"] == "computed"
 
+    dash = report["dashboard"]
+    assert dash["t_factory_magic_aux_applicable_to_target"] is False
+    assert dash["t_factory_transition_modulus_bits_order_of_magnitude"] is None
+    assert dash["t_factory_fallback_recommended"] is False
+    assert dash["t_factory_fallback_non_clifford_mechanism"] is None
+    assert any("magic_aux T-factory transition metadata applies only" in str(w) for w in report["warnings"])
+
     json.dumps(report, allow_nan=False)
     md = report_to_markdown(report)
     assert "oratomic_gold_path" in md
+
+
+def test_rsa_magic_aux_recommends_fallback_when_n_above_transition() -> None:
+    root = find_square_root()
+    scenario = root / "Configs" / "rsa2048_gidney_ekera_2021_parallel.yaml"
+    bundle = load_scenario_bundle(scenario, root=root)
+    report = build_scenario_report(bundle, modulus_bits_override=40_000)
+    dash = report["dashboard"]
+    assert dash["t_factory_magic_aux_applicable_to_target"] is True
+    assert dash["t_factory_fallback_recommended"] is True
+    assert any("t_distillation_fowler_et_al_style" in str(w) for w in report["warnings"])
 
 
 def test_build_report_surfaces_qcvv_qem_layers_when_loaded(tmp_path: Path) -> None:
@@ -318,26 +354,21 @@ def test_build_report_surfaces_qcvv_qem_layers_when_loaded(tmp_path: Path) -> No
     assert "Mitigated operations ceiling" in md
 
 
-def test_rsa_parallel_identity_qcvv_qem_repo_scenario_matches_baseline_heuristics() -> None:
-    """Repo ``*_qcvv_qem`` RSA scenario: identity QCVV/QEM → same ``d`` / LOB as baseline; VER and ceiling populated."""
+def test_rsa_mvp_repo_scenario_identity_qcvv_qem_heuristics() -> None:
+    """MVP RSA flagship includes identity QCVV/QEM, Table-2 heuristics, VER, and mitigated ceiling."""
     root = find_square_root()
-    base = build_scenario_report(
+    report = build_scenario_report(
         load_scenario_bundle(root / "Configs" / "rsa2048_gidney_ekera_2021_parallel.yaml", root=root)
     )
-    wired = build_scenario_report(
-        load_scenario_bundle(root / "Configs" / "rsa2048_gidney_ekera_2021_parallel_qcvv_qem.yaml", root=root)
-    )
-    assert wired["layers"]["qcvv"] is not None
-    assert wired["layers"]["qem"] is not None
-    assert wired["sources"]["qcvv"]["document_id"] == "qcvv_identity_no_overhead"
-    assert wired["sources"]["qem"]["document_id"] == "qem_identity_no_overhead"
-    assert base["qec_distance_resolution"]["distance_d"] == wired["qec_distance_resolution"]["distance_d"]
-    assert base["dashboard"]["code_distance_d"] == wired["dashboard"]["code_distance_d"]
-    assert wired["system_metrics"]["validated_error_rate_ver"] == pytest.approx(0.001)
-    lob_b = float(base["system_metrics"]["logical_operations_budget_lob"])
-    lob_w = float(wired["system_metrics"]["logical_operations_budget_lob"])
-    assert lob_w == pytest.approx(lob_b)
-    assert wired["system_metrics"]["mitigated_operations_ceiling"] == pytest.approx(lob_w)
+    assert report["layers"]["qcvv"] is not None
+    assert report["layers"]["qem"] is not None
+    assert report["sources"]["qcvv"]["document_id"] == "qcvv_identity_no_overhead"
+    assert report["sources"]["qem"]["document_id"] == "qem_identity_no_overhead"
+    assert report["qec_distance_resolution"]["distance_d"] == 25
+    assert report["dashboard"]["code_distance_d"] == 25
+    assert report["system_metrics"]["validated_error_rate_ver"] == pytest.approx(0.001)
+    lob = float(report["system_metrics"]["logical_operations_budget_lob"])
+    assert report["system_metrics"]["mitigated_operations_ceiling"] == pytest.approx(lob)
 
 
 def test_illustrative_ecdlp_qcvv_qem_repo_scenario_ver_and_mitigated_ceiling() -> None:
@@ -345,7 +376,7 @@ def test_illustrative_ecdlp_qcvv_qem_repo_scenario_ver_and_mitigated_ceiling() -
     root = find_square_root()
     report = build_scenario_report(
         load_scenario_bundle(
-            root / "Configs" / "ecdlp_secp256k1_babbush_2026_low_toffoli_illustrative_qcvv_qem.yaml",
+            root / "tests" / "fixtures" / "ecdlp_illustrative_qcvv_qem.yaml",
             root=root,
         )
     )
@@ -447,7 +478,7 @@ def test_system_metrics_lob_note_distinguishes_p_l_from_ver() -> None:
     root = find_square_root()
     report = build_scenario_report(
         load_scenario_bundle(
-            root / "Configs" / "rsa2048_gidney_ekera_2021_parallel_qcvv_qem.yaml",
+            root / "Configs" / "rsa2048_gidney_ekera_2021_parallel.yaml",
             root=root,
         )
     )
@@ -463,3 +494,40 @@ def test_read_qcvv_characterization_error_multiplier() -> None:
     assert read_qcvv_characterization_error_multiplier(None, w) is None
     doc = {"effective_physical_error_rate_multiplier_from_characterization": {"value": 1.2, "unit": "ratio"}}
     assert read_qcvv_characterization_error_multiplier(doc, w, context="t") == pytest.approx(1.2)
+
+
+def test_heuristic_phenomenological_disabled_skips_distance_and_p_l(tmp_path: Path) -> None:
+    """``qec.heuristic_phenomenological_logical_error_model_applies: false`` gates phenomenology + heuristic d."""
+    root = find_square_root()
+    scen = tmp_path / "phenom_off.yaml"
+    scen.write_text(
+        "\n".join(
+            [
+                "schema_version: 1",
+                "scenario: _pytest_phenom_off",
+                "description: test",
+                "target:",
+                "  problem: ecdlp_secp256k1_256_bit",
+                "  curve_bit_length: 256",
+                "  ecdlp_variant: low_toffoli_variant",
+                "qec:",
+                "  distance_policy: heuristic_union_bound",
+                "  logical_error_budget: 0.1",
+                "  heuristic_phenomenological_logical_error_model_applies: false",
+                "paths:",
+                "  modality: Assumptions/Modalities/superconducting_babbush_et_al_2026.yaml",
+                "  qec_code: Assumptions/QEC_Codes/surface_gidney_ekera_2021.yaml",
+                "  magic: Assumptions/MagicStateProduction/ccz_factory_gidney_ekera_2021.yaml",
+                "  magic_aux: Assumptions/MagicStateProduction/t_factory_fallback_gidney_ekera_2021.yaml",
+                "  algorithm: Algorithms/ecdlp_secp256k1_babbush_et_al_2026.yaml",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    report = build_scenario_report(load_scenario_bundle(scen, root=root))
+    assert report["qec_distance_resolution"]["mode"] == "heuristic_disabled_by_assumption"
+    assert report["qec_distance_resolution"]["distance_d"] is None
+    assert report["logical_fault_model"]["status"] == "model_disabled_by_assumption"
+    assert report["logical_fault_model"]["logical_error_rate_per_cycle"] is None
+    assert report["dashboard"]["code_distance_d"] is None
+    assert report["dashboard"][DASHBOARD_LOGICAL_FAILURE_PROXY_KEY] is None

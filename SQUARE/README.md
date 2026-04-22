@@ -43,7 +43,7 @@ Build metadata (`*.egg-info/`, `__pycache__/`, `.pytest_cache/`) is gitignored a
 
 Use `square.loader.load_scenario_bundle` with a YAML under `Configs/` that lists relative `paths` to modality, `qec_code`, `magic`, `algorithm`, and optional `magic_aux`, `qcvv`, `qem`. Paths are resolved from the repo root (the directory that contains `Assumptions/Schemas.yaml`).
 
-Example scenarios: `Configs/rsa2048_gidney_ekera_2021_parallel.yaml` (RSA-2048), `Configs/ecdlp_secp256k1_babbush_2026_low_toffoli.yaml` (ECDLP secp256k1, Babbush et al. envelope), `Configs/ecdlp_secp256k1_cain_2026_neutral_atom_qldpc.yaml` (same ECDLP algorithm envelope; Cain et al. neutral-atom modality + QLDPC). **Gold path (Oratomic):** `Configs/oratomic_gold_path.yaml` — identical composition to the Cain ECDLP scenario with stable scenario id `oratomic_gold_path` for demos and tests. **Validation / literature comparison:** add entries to `docs/validation_index.yaml` and prose under `docs/validation_overview.md` (one overview file + structured index, not one `.md` per paper).
+Example scenarios (MVP `Configs/` only): `Configs/rsa2048_gidney_ekera_2021_parallel.yaml` (RSA-2048), `Configs/ecdlp_secp256k1_babbush_2026_low_toffoli.yaml` (ECDLP secp256k1, Babbush et al. envelope), `Configs/oratomic_gold_path.yaml` (**Oratomic gold path:** Cain et al. neutral-atom modality + QLDPC + same ECDLP algorithm document; stable id `oratomic_gold_path`). **Validation / literature comparison:** add entries to `docs/validation_index.yaml` and prose under `docs/validation_overview.md` (one overview file + structured index, not one `.md` per paper).
 
 New YAML contributions must satisfy `Schemas.yaml` (document header + provenance on every parameter: `value`, `unit`, `confidence`, `source`, `date`; add `doi` / `section` / `notes` when useful).
 
@@ -51,7 +51,7 @@ New YAML contributions must satisfy `Schemas.yaml` (document header + provenance
 
 The **output contract** for machine-readable reports is `docs/output-contract.md` (`report_contract_version`).
 
-**Monte Carlo (prior predictive):** `docs/monte_carlo.md`, `square/mc/README.md`, module `square.mc`. After `pip install -e .`: `square-mc Configs/monte_carlo_study_ecdlp_example.yaml --samples 100 --seed 42` (add `--jobs 4` for threaded runs; LHS example: `Configs/monte_carlo_study_ecdlp_lhs.yaml`). Demo: `python scripts/mc_demo.py`.
+**Monte Carlo (prior predictive):** `docs/monte_carlo.md`, `square/mc/README.md`, module `square.mc`. After `pip install -e .`: `square-mc tests/fixtures/monte_carlo_study_ecdlp_example.yaml --samples 100 --seed 42` (add `--jobs 4` for threaded runs; LHS example: `tests/fixtures/monte_carlo_study_ecdlp_lhs.yaml`). Demo: `python scripts/mc_demo.py`.
 
 Reports include:
 

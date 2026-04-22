@@ -1,5 +1,5 @@
 {
-  "mc_summary_contract_version": 1,
+  "mc_summary_contract_version": 2,
   "study_id": "mc_ecdlp_lhs_uniform_only",
   "schema_version": 1,
   "scope": "prior_predictive_only",
@@ -7,6 +7,7 @@
   "seed": 42,
   "sampling_strategy": "latin_hypercube",
   "n_jobs": 1,
+  "strict_metrics": false,
   "parameter_keys": [
     "characteristic_physical_gate_error_rate",
     "surface_code_cycle_time",
@@ -17,7 +18,7 @@
     "code_distance_d",
     "approximate_data_plane_physical_qubits",
     "logical_qubits_at_n",
-    "logical_failure_probability_union_depth_proxy",
+    "logical_failure_proxy_union_depth_phenomenological",
     "magic_limited_runtime_multiplier",
     "ecdlp_toffoli_gates_upper_bound"
   ],
@@ -57,7 +58,7 @@
       "p50": 1450.0,
       "p95": 1450.0
     },
-    "logical_failure_probability_union_depth_proxy": {
+    "logical_failure_proxy_union_depth_phenomenological": {
       "p05": 6.911826311683246e-06,
       "p50": 2.013230726269848e-05,
       "p95": 6.213252315661031e-05
@@ -119,7 +120,7 @@
       "min": 1450.0,
       "max": 1450.0
     },
-    "logical_failure_probability_union_depth_proxy": {
+    "logical_failure_proxy_union_depth_phenomenological": {
       "n": 200.0,
       "mean": 2.599732083212437e-05,
       "std": 1.7444842898887224e-05,
@@ -140,7 +141,7 @@
       "approximate_data_plane_physical_qubits": 1.0,
       "code_distance_d": 0.996700113749385,
       "ecdlp_toffoli_gates_upper_bound": null,
-      "logical_failure_probability_union_depth_proxy": 0.091492043404133,
+      "logical_failure_proxy_union_depth_phenomenological": 0.091492043404133,
       "logical_qubits_at_n": null,
       "naive_serial_time_days": -0.09363475383857507
     },
@@ -148,7 +149,7 @@
       "approximate_data_plane_physical_qubits": 0.996700113749385,
       "code_distance_d": 1.0,
       "ecdlp_toffoli_gates_upper_bound": null,
-      "logical_failure_probability_union_depth_proxy": 0.08999220674874853,
+      "logical_failure_proxy_union_depth_phenomenological": 0.08999220674874853,
       "logical_qubits_at_n": null,
       "naive_serial_time_days": -0.09103265768056053
     },
@@ -156,15 +157,15 @@
       "approximate_data_plane_physical_qubits": null,
       "code_distance_d": null,
       "ecdlp_toffoli_gates_upper_bound": 1.0,
-      "logical_failure_probability_union_depth_proxy": null,
+      "logical_failure_proxy_union_depth_phenomenological": null,
       "logical_qubits_at_n": null,
       "naive_serial_time_days": null
     },
-    "logical_failure_probability_union_depth_proxy": {
+    "logical_failure_proxy_union_depth_phenomenological": {
       "approximate_data_plane_physical_qubits": 0.091492043404133,
       "code_distance_d": 0.08999220674874853,
       "ecdlp_toffoli_gates_upper_bound": null,
-      "logical_failure_probability_union_depth_proxy": 1.0,
+      "logical_failure_proxy_union_depth_phenomenological": 1.0,
       "logical_qubits_at_n": null,
       "naive_serial_time_days": 0.000765553783825734
     },
@@ -172,7 +173,7 @@
       "approximate_data_plane_physical_qubits": null,
       "code_distance_d": null,
       "ecdlp_toffoli_gates_upper_bound": null,
-      "logical_failure_probability_union_depth_proxy": null,
+      "logical_failure_proxy_union_depth_phenomenological": null,
       "logical_qubits_at_n": 1.0,
       "naive_serial_time_days": null
     },
@@ -180,9 +181,55 @@
       "approximate_data_plane_physical_qubits": -0.09363475383857507,
       "code_distance_d": -0.09103265768056053,
       "ecdlp_toffoli_gates_upper_bound": null,
-      "logical_failure_probability_union_depth_proxy": 0.000765553783825734,
+      "logical_failure_proxy_union_depth_phenomenological": 0.000765553783825734,
       "logical_qubits_at_n": null,
       "naive_serial_time_days": 1.0
     }
-  }
+  },
+  "column_numeric_present_counts": {
+    "characteristic_physical_gate_error_rate": {
+      "present": 200,
+      "n_samples": 200
+    },
+    "surface_code_cycle_time": {
+      "present": 200,
+      "n_samples": 200
+    },
+    "heuristic_surface_code_physical_threshold_order_of_magnitude": {
+      "present": 200,
+      "n_samples": 200
+    },
+    "naive_serial_time_days": {
+      "present": 200,
+      "n_samples": 200
+    },
+    "code_distance_d": {
+      "present": 200,
+      "n_samples": 200
+    },
+    "approximate_data_plane_physical_qubits": {
+      "present": 200,
+      "n_samples": 200
+    },
+    "logical_qubits_at_n": {
+      "present": 200,
+      "n_samples": 200
+    },
+    "logical_failure_proxy_union_depth_phenomenological": {
+      "present": 200,
+      "n_samples": 200
+    },
+    "magic_limited_runtime_multiplier": {
+      "present": 0,
+      "n_samples": 200
+    },
+    "ecdlp_toffoli_gates_upper_bound": {
+      "present": 200,
+      "n_samples": 200
+    }
+  },
+  "summary_degraded_from_row_filtering": true,
+  "notes": [
+    "Pearson correlations use only columns where every row in that column parses as a finite float; pairwise series are aligned by row index (complete-case only). Not a principled estimator under MCAR missingness."
+  ]
 }

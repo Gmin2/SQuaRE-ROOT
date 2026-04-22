@@ -16,9 +16,12 @@ from square.mc import (
     load_monte_carlo_study_spec,
     run_monte_carlo_study,
     sample_parameter_value,
+    validate_distribution_spec,
     write_mc_samples_csv,
     write_mc_summary_json,
 )
+from square.mc.forward_model import MC_STRICT_REQUIRED_METRIC_KEYS
+from square.mc.lhs import generate_lhs_uniform_thetas
 from square.mc.overrides import apply_numeric_overrides
 
 
@@ -58,7 +61,7 @@ def test_apply_numeric_overrides_two_qubit_changes_p_nominal_in_report() -> None
 
 def test_monte_carlo_study_with_1q2q_parameters_runs() -> None:
     root = find_square_root()
-    spec = load_monte_carlo_study_spec(root / "Configs" / "monte_carlo_study_ecdlp_with_1q2q.yaml", root=root)
+    spec = load_monte_carlo_study_spec(root / "tests" / "fixtures" / "monte_carlo_study_ecdlp_with_1q2q.yaml", root=root)
     assert spec.study_id == "mc_ecdlp_gate_rates_and_cycle_priors"
     assert len(spec.parameters) == 5
     bundle = load_scenario_bundle(root / spec.base_scenario, root=root)
@@ -91,10 +94,18 @@ def test_apply_numeric_overrides_unknown_key() -> None:
 
 
 def test_load_study_spec_relative() -> None:
-    spec = load_monte_carlo_study_spec("Configs/monte_carlo_study_ecdlp_example.yaml")
+    spec = load_monte_carlo_study_spec("tests/fixtures/monte_carlo_study_ecdlp_example.yaml")
     assert spec.study_id == "mc_ecdlp_gate_and_cycle_priors"
     assert len(spec.parameters) == 3
     assert spec.sampling_strategy == "independent"
+    assert spec.strict_metrics is False
+
+
+def test_load_monte_carlo_study_strict_metrics_from_yaml() -> None:
+    root = find_square_root()
+    study = root / "tests" / "fixtures" / "mc_study_strict_metrics_true.yaml"
+    spec = load_monte_carlo_study_spec(study, root=root)
+    assert spec.strict_metrics is True
 
 
 def test_load_monte_carlo_study_spec_rejects_escape_relative_to_root() -> None:
@@ -124,6 +135,61 @@ def test_evaluate_forward_model_mc_metrics_matches_full_extract() -> None:
     assert full_m == slim_m
 
 
+def test_validate_distribution_requires_strictly_increasing_bounds() -> None:
+    with pytest.raises(ValueError, match="low < high"):
+        validate_distribution_spec({"distribution": "uniform", "low": 1.0, "high": 1.0})
+    with pytest.raises(ValueError, match="low < high"):
+        validate_distribution_spec({"distribution": "uniform", "low": 2.0, "high": 1.0})
+    with pytest.raises(ValueError, match="low < high"):
+        validate_distribution_spec({"distribution": "log_uniform", "low": 1.0, "high": 0.5})
+    with pytest.raises(ValueError, match="strictly positive"):
+        validate_distribution_spec({"distribution": "log_uniform", "low": 0.0, "high": 1.0})
+
+
+def test_load_monte_carlo_study_rejects_inverted_uniform_bounds() -> None:
+    root = find_square_root()
+    with pytest.raises(ValueError, match="low < high"):
+        load_monte_carlo_study_spec(root / "tests" / "fixtures" / "mc_study_bad_uniform_bounds.yaml", root=root)
+
+
+def test_sample_parameter_value_rejects_inverted_uniform() -> None:
+    rng = random.Random(0)
+    with pytest.raises(ValueError, match="low < high"):
+        sample_parameter_value({"distribution": "uniform", "low": 3.0, "high": 1.0}, rng)
+
+
+def _stratum_index(x: float, lo: float, hi: float, n: int) -> int:
+    w = (hi - lo) / n
+    idx = int((x - lo) / w)
+    if idx >= n:
+        idx = n - 1
+    if idx < 0:
+        idx = 0
+    return idx
+
+
+def test_lhs_uniform_one_draw_per_stratum_per_dimension() -> None:
+    """Each LHS dimension should visit each equal-width stratum exactly once across n_samples."""
+    n_samples = 11
+    blocks = [
+        {"parameter_key": "p0", "distribution": "uniform", "low": 0.0, "high": 10.0},
+        {"parameter_key": "p1", "distribution": "uniform", "low": -3.0, "high": 7.0},
+        {"parameter_key": "p2", "distribution": "uniform", "low": 100.0, "high": 200.0},
+    ]
+    thetas = generate_lhs_uniform_thetas(blocks, n_samples, random.Random(12345))
+    assert len(thetas) == n_samples
+    for b in blocks:
+        key = str(b["parameter_key"])
+        lo_r, hi_r = b["low"], b["high"]
+        assert isinstance(lo_r, (int, float)) and isinstance(hi_r, (int, float))
+        lo, hi = float(lo_r), float(hi_r)
+        for th in thetas:
+            v = th[key]
+            assert lo <= v <= hi
+        strata = sorted(_stratum_index(th[key], lo, hi, n_samples) for th in thetas)
+        assert strata == list(range(n_samples))
+
+
 def test_sample_parameter_reproducible() -> None:
     spec = {"distribution": "uniform", "low": 0.0, "high": 1.0}
     rng = random.Random(7)
@@ -136,7 +202,7 @@ def test_sample_parameter_reproducible() -> None:
 def test_run_monte_carlo_study_small() -> None:
     root = find_square_root()
     spec = load_monte_carlo_study_spec(
-        root / "Configs" / "monte_carlo_study_ecdlp_example.yaml",
+        root / "tests" / "fixtures" / "monte_carlo_study_ecdlp_example.yaml",
         root=root,
     )
     bundle = load_scenario_bundle(root / spec.base_scenario, root=root)
@@ -151,12 +217,18 @@ def test_run_monte_carlo_study_small() -> None:
     assert "mean" in result.summary["moments"]["naive_serial_time_days"]
     assert "correlations" in result.summary
     assert result.summary["mc_summary_contract_version"] == MC_SUMMARY_CONTRACT_VERSION
+    assert result.summary["strict_metrics"] is False
+    assert "column_numeric_present_counts" in result.summary
+    assert "summary_degraded_from_row_filtering" in result.summary
+    assert "notes" in result.summary
+    assert result.summary["mc_joint_sampling_disclaimer"]
+    assert result.summary["strict_metrics_required_keys"] == list(MC_STRICT_REQUIRED_METRIC_KEYS)
 
 
 def test_latin_hypercube_requires_all_uniform() -> None:
     root = find_square_root()
     spec = load_monte_carlo_study_spec(
-        root / "Configs" / "monte_carlo_study_ecdlp_example.yaml",
+        root / "tests" / "fixtures" / "monte_carlo_study_ecdlp_example.yaml",
         root=root,
     )
     bundle = load_scenario_bundle(root / spec.base_scenario, root=root)
@@ -173,18 +245,29 @@ def test_latin_hypercube_requires_all_uniform() -> None:
 
 def test_latin_hypercube_study_runs() -> None:
     root = find_square_root()
-    spec = load_monte_carlo_study_spec(root / "Configs" / "monte_carlo_study_ecdlp_lhs.yaml", root=root)
+    spec = load_monte_carlo_study_spec(root / "tests" / "fixtures" / "monte_carlo_study_ecdlp_lhs.yaml", root=root)
     assert spec.sampling_strategy == "latin_hypercube"
     bundle = load_scenario_bundle(root / spec.base_scenario, root=root)
     result = run_monte_carlo_study(spec, bundle, n_samples=12, seed=99, include_full_report=False)
     assert len(result.rows) == 12
     assert result.summary["sampling_strategy"] == "latin_hypercube"
+    assert result.summary["mc_joint_sampling_disclaimer"]
+    assert result.summary["strict_metrics_required_keys"] == list(MC_STRICT_REQUIRED_METRIC_KEYS)
+    bounds = {str(b["parameter_key"]): (float(b["low"]), float(b["high"])) for b in spec.parameters}
+    for row in result.rows:
+        for k, (lo, hi) in bounds.items():
+            v = row[k]
+            assert isinstance(v, (int, float))
+            assert lo <= float(v) <= hi
+    for key, (lo, hi) in bounds.items():
+        strata = sorted(_stratum_index(float(row[key]), lo, hi, 12) for row in result.rows)
+        assert strata == list(range(12))
 
 
 def test_monte_carlo_parallel_threads() -> None:
     root = find_square_root()
     spec = load_monte_carlo_study_spec(
-        root / "Configs" / "monte_carlo_study_ecdlp_example.yaml",
+        root / "tests" / "fixtures" / "monte_carlo_study_ecdlp_example.yaml",
         root=root,
     )
     bundle = load_scenario_bundle(root / spec.base_scenario, root=root)
@@ -224,7 +307,7 @@ def test_cli_mc_main_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.chdir(tmp_path)
     code = cli_mc.main(
         [
-            str(root / "Configs" / "monte_carlo_study_ecdlp_example.yaml"),
+            str(root / "tests" / "fixtures" / "monte_carlo_study_ecdlp_example.yaml"),
             "--samples",
             "4",
             "--seed",
@@ -253,7 +336,7 @@ def test_cli_mc_rejects_non_positive_jobs(tmp_path: Path, monkeypatch: pytest.Mo
     monkeypatch.chdir(tmp_path)
     code = cli_mc.main(
         [
-            str(root / "Configs" / "monte_carlo_study_ecdlp_example.yaml"),
+            str(root / "tests" / "fixtures" / "monte_carlo_study_ecdlp_example.yaml"),
             "--samples",
             "1",
             "--jobs",
@@ -272,7 +355,7 @@ def test_cli_mc_rejects_non_positive_samples(tmp_path: Path, monkeypatch: pytest
     monkeypatch.chdir(tmp_path)
     code = cli_mc.main(
         [
-            str(root / "Configs" / "monte_carlo_study_ecdlp_example.yaml"),
+            str(root / "tests" / "fixtures" / "monte_carlo_study_ecdlp_example.yaml"),
             "--samples",
             "-1",
             "--root",

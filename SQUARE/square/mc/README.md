@@ -9,11 +9,11 @@
 
 ## Variance reduction
 
-- **Latin hypercube** (`sampling.strategy: latin_hypercube`): requires **every** parameter block to be `distribution: uniform`. Use `Configs/monte_carlo_study_ecdlp_lhs.yaml` as a template. For log-spaced physical quantities, prefer **independent** draws with `log_uniform` per parameter.
+- **Latin hypercube** (`sampling.strategy: latin_hypercube`): requires **every** parameter block to be `distribution: uniform`. Use `tests/fixtures/monte_carlo_study_ecdlp_lhs.yaml` as a template. For log-spaced physical quantities, prefer **independent** draws with `log_uniform` per parameter.
 
 ## Parallelism
 
-`n_jobs > 1` uses `ThreadPoolExecutor` and a **shared** loaded `ScenarioBundle`. Each draw calls `apply_numeric_overrides`, which builds **shallow** copies of the modality/QEC document roots and **`deepcopy`s only the overridden `parameter_entry` nodes** (not full trees). **Correctness assumes** the report pipeline treats loaded YAML documents as **read-only** except via those explicit copies; do not mutate nested dicts in place during `build_scenario_report`. Speedup is **not** guaranteed on CPU-bound CPython due to the GIL; use for moderate `n_samples` or profile on your machine.
+`n_jobs > 1` uses `ThreadPoolExecutor`. Each draw receives a **`deepcopy` of the loaded `ScenarioBundle`** before `evaluate_forward_model`, so concurrent tasks do not share mutable nested YAML dicts if the report pipeline ever mutates them. That trades CPU and memory for isolation (acceptable for moderate `n_samples`). `n_jobs == 1` reuses the original bundle reference sequentially. Speedup is **not** guaranteed on CPU-bound CPython due to the GIL; profile on your machine.
 
 ## CLI
 

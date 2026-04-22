@@ -8,11 +8,14 @@ from typing import Any
 from square.report_magic_throughput import compute_magic_throughput_dashboard_fields
 from square.yaml_numeric import read_evaluated_abstract_measurement_depth_layers
 
+# Dashboard JSON key: phenomenological union-depth **proxy** (not a calibrated logical failure probability).
+DASHBOARD_LOGICAL_FAILURE_PROXY_KEY = "logical_failure_proxy_union_depth_phenomenological"
+
 # ``depth_layers=...`` uses this default so ``None`` means "caller already evaluated depth" (no re-read).
 _UNSET_DEPTH: object = object()
 
 
-def compute_logical_failure_probability_union_depth_proxy(
+def compute_logical_failure_proxy_union_depth_phenomenological(
     *,
     logical_fault_model: Mapping[str, Any],
     evaluated: Mapping[str, Any],
@@ -20,7 +23,7 @@ def compute_logical_failure_probability_union_depth_proxy(
     depth_layers: float | None | object = _UNSET_DEPTH,
 ) -> float | None:
     """
-    Conservative union-style logical failure proxy ``min(1, D × p_L)``.
+    Union-style logical failure **proxy** ``min(1, D × p_L)`` (phenomenological); **not** P(fail).
 
     Optional ``depth_layers`` avoids a second parse when the caller already read ``D`` via
     :func:`square.yaml_numeric.read_evaluated_abstract_measurement_depth_layers`.
@@ -34,14 +37,14 @@ def compute_logical_failure_probability_union_depth_proxy(
     p_l_raw = logical_fault_model.get("logical_error_rate_per_cycle")
     if p_l_raw is None or not isinstance(p_l_raw, (int, float)):
         warnings.append(
-            "dashboard.logical_failure_probability_union_depth_proxy omitted: need numeric "
+            f"dashboard.{DASHBOARD_LOGICAL_FAILURE_PROXY_KEY} omitted: need numeric "
             "logical_fault_model.logical_error_rate_per_cycle (phenomenological p_L)."
         )
         return None
     p_l = float(p_l_raw)
     if p_l <= 0.0:
         warnings.append(
-            "dashboard.logical_failure_probability_union_depth_proxy omitted: "
+            f"dashboard.{DASHBOARD_LOGICAL_FAILURE_PROXY_KEY} omitted: "
             "logical_fault_model.logical_error_rate_per_cycle must be > 0."
         )
         return None
@@ -50,7 +53,7 @@ def compute_logical_failure_probability_union_depth_proxy(
         d_layers = read_evaluated_abstract_measurement_depth_layers(
             evaluated,
             warnings,
-            context="dashboard.logical_failure_probability_union_depth_proxy",
+            context=f"dashboard.{DASHBOARD_LOGICAL_FAILURE_PROXY_KEY}",
         )
     else:
         d_layers = depth_layers  # type: ignore[assignment]
@@ -91,8 +94,7 @@ def build_dashboard_fields(
     megaqd: float | None,
     patch_physical_per_logical: float | None,
     approx_data_physical: float | None,
-    t_fallback_recommended: bool,
-    t_transition: int | None,
+    magic_aux_t_factory_dashboard: Mapping[str, Any],
     d_resolved: int | None,
     qec_distance_resolution_mode: Any,
     derived_non_data_overhead_physical_qubits: float | None,
@@ -109,8 +111,8 @@ def build_dashboard_fields(
 
     ECDLP-specific keys are merged from ``ecdlp_block_for_metrics`` when present.
 
-    ``logical_failure_probability_union_depth_proxy`` uses the same ``p_L`` and depth proxy as OSRE-style
-    notes; see :func:`compute_logical_failure_probability_union_depth_proxy`.
+    ``logical_failure_proxy_union_depth_phenomenological`` uses the same ``p_L`` and depth proxy as OSRE-style
+    notes; see :func:`compute_logical_failure_proxy_union_depth_phenomenological`.
 
     ``magic_supply_adequate`` / ``magic_limited_runtime_multiplier`` come from
     :func:`square.report_magic_throughput.compute_magic_throughput_dashboard_fields`.
@@ -120,7 +122,7 @@ def build_dashboard_fields(
         warnings,
         context="dashboard.abstract_measurement_depth_layers",
     )
-    fail_p = compute_logical_failure_probability_union_depth_proxy(
+    fail_p = compute_logical_failure_proxy_union_depth_phenomenological(
         logical_fault_model=logical_fault_model,
         evaluated=evaluated,
         warnings=warnings,
@@ -156,8 +158,6 @@ def build_dashboard_fields(
         "minimum_spacetime_volume_megaqubitdays_at_n": megaqd,
         "logical_qubit_physical_qubits_if_distance_d": patch_physical_per_logical,
         "approximate_data_plane_physical_qubits": approx_data_physical,
-        "t_factory_fallback_recommended": t_fallback_recommended,
-        "t_factory_transition_modulus_bits_order_of_magnitude": t_transition,
         "code_distance_d": d_resolved,
         "qec_distance_resolution_mode": qec_distance_resolution_mode,
         "derived_non_data_overhead_physical_qubits": derived_non_data_overhead_physical_qubits,
@@ -168,8 +168,9 @@ def build_dashboard_fields(
         "schedule_calibration_ratio_table2_over_model_v1": schedule_calibration.get("ratio_table2_pinned_over_model_v1")
         if schedule_calibration
         else None,
-        "logical_failure_probability_union_depth_proxy": fail_p,
+        DASHBOARD_LOGICAL_FAILURE_PROXY_KEY: fail_p,
     }
+    base.update(magic_aux_t_factory_dashboard)
     base.update(magic_tp)
     base.update(_ecdlp_dashboard_extras(ecdlp_block_for_metrics))
     return base

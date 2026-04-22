@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from square.loader import find_square_root, load_scenario_bundle
+from square.report_dashboard import DASHBOARD_LOGICAL_FAILURE_PROXY_KEY
 from square.plotting import (
     extract_report_plot_frame,
     load_mc_samples_rows_from_csv,
@@ -26,7 +27,7 @@ def test_extract_report_plot_frame_rsa_keys() -> None:
     report = build_scenario_report(bundle)
     frame = extract_report_plot_frame(report)
     assert frame["scenario"] == "rsa2048_gidney_ekera_2021_parallel"
-    assert frame["logical_failure_probability_union_depth_proxy"] is not None
+    assert frame[DASHBOARD_LOGICAL_FAILURE_PROXY_KEY] is not None
     assert frame["magic_supply_adequate"] is True
     assert frame["magic_limited_runtime_multiplier"] == pytest.approx(1.0)
     assert frame["warnings_count"] is not None
@@ -65,7 +66,7 @@ def test_load_mc_samples_rows_from_csv_roundtrip(tmp_path: Path) -> None:
     csv_path = tmp_path / "s.csv"
     csv_path.write_text(
         "sample_index,characteristic_physical_gate_error_rate,"
-        "logical_failure_probability_union_depth_proxy,magic_limited_runtime_multiplier\n"
+        "logical_failure_proxy_union_depth_phenomenological,magic_limited_runtime_multiplier\n"
         "0,0.001,0.02,1.0\n"
         "1,0.002,0.04,1.0\n",
         encoding="utf-8",
@@ -79,7 +80,7 @@ def test_load_mc_samples_rows_from_csv_roundtrip(tmp_path: Path) -> None:
 def test_write_mc_semantics_png_respects_plot_theta(tmp_path: Path) -> None:
     csv_path = tmp_path / "s.csv"
     csv_path.write_text(
-        "sample_index,surface_code_cycle_time,logical_failure_probability_union_depth_proxy,"
+        "sample_index,surface_code_cycle_time,logical_failure_proxy_union_depth_phenomenological,"
         "magic_limited_runtime_multiplier\n"
         "0,1.0,0.02,1.0\n"
         "1,2.0,0.04,1.0\n"
@@ -102,7 +103,7 @@ def test_write_mc_semantics_png_from_csv_rows(tmp_path: Path) -> None:
     csv_path = tmp_path / "s.csv"
     csv_path.write_text(
         "sample_index,characteristic_physical_gate_error_rate,"
-        "logical_failure_probability_union_depth_proxy,magic_limited_runtime_multiplier\n"
+        "logical_failure_proxy_union_depth_phenomenological,magic_limited_runtime_multiplier\n"
         "0,0.001,0.02,1.0\n"
         "1,0.002,0.05,1.0\n"
         "2,0.003,0.08,1.0\n",

@@ -26,6 +26,8 @@ class MonteCarloStudySpec:
     base_scenario: str
     parameters: list[dict[str, Any]]
     sampling_strategy: str = "independent"
+    #: When true, each draw must yield all :data:`MC_STRICT_REQUIRED_METRIC_KEYS`; else the run aborts.
+    strict_metrics: bool = False
 
 
 def load_monte_carlo_study_spec(
@@ -95,6 +97,12 @@ def load_monte_carlo_study_spec(
         else:
             raise ValueError(f"Unknown sampling_strategy {s!r}.")
 
+    strict_metrics = False
+    if raw.get("strict_metrics") is True:
+        strict_metrics = True
+    elif isinstance(raw.get("mc"), dict) and raw["mc"].get("strict_metrics") is True:
+        strict_metrics = True
+
     return MonteCarloStudySpec(
         schema_version=schema_version,
         study_id=study_id,
@@ -103,4 +111,5 @@ def load_monte_carlo_study_spec(
         base_scenario=str(base_scenario).strip(),
         parameters=list(params),
         sampling_strategy=sampling_strategy,
+        strict_metrics=strict_metrics,
     )

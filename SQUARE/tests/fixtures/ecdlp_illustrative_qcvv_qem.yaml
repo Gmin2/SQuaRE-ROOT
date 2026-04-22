@@ -1,9 +1,9 @@
-# Same stack as ``ecdlp_secp256k1_babbush_2026_low_toffoli.yaml`` with identity QCVV + QEM profiles wired.
+# Non-MVP fixture: illustrative (non-identity) QCVV + QEM for tests only.
 schema_version: 1
-scenario: ecdlp_secp256k1_babbush_2026_low_toffoli_qcvv_qem
+scenario: ecdlp_secp256k1_babbush_2026_low_toffoli_illustrative_qcvv_qem
 description: >-
-  ECDLP low-Toffoli envelope (Babbush et al. 2026) with ``paths.qcvv`` / ``paths.qem`` identity
-  placeholders. Use the baseline file for comparisons where QCVV/QEM layers should be absent.
+  Same composition as MVP ``Configs/ecdlp_secp256k1_babbush_2026_low_toffoli.yaml``, but QCVV σ=1.15
+  and QEM stub (s=0.85, Γ=4) for sensitivity tests. Numbers are illustrative, not paper-pinned.
 
 target:
   problem: ecdlp_secp256k1_256_bit
@@ -20,5 +20,5 @@ paths:
   magic: Assumptions/MagicStateProduction/ccz_factory_gidney_ekera_2021.yaml
   magic_aux: Assumptions/MagicStateProduction/t_factory_fallback_gidney_ekera_2021.yaml
   algorithm: Algorithms/ecdlp_secp256k1_babbush_et_al_2026.yaml
-  qcvv: Assumptions/QCVV/identity_no_overhead.yaml
-  qem: Assumptions/QEM/identity_no_overhead.yaml
+  qcvv: Assumptions/QCVV/benchmarking_operational_error_sigma_1_15.yaml
+  qem: Assumptions/QEM/example_zne_style_stub.yaml

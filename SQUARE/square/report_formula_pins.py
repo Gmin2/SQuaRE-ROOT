@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from square.report_formula_metrics import (
-    FORMULA_METRICS,
+    ecdlp_evaluated_skipped_formula_keys,
     evaluate_non_ecdlp_formula_metrics,
 )
 from square.report_layers import DOCUMENT_HEADER_KEYS
@@ -302,8 +302,7 @@ def _build_ecdlp_report_context(
         },
     }
 
-    skipped = [src_key for src_key, _ in FORMULA_METRICS]
-    skipped.append("exponent_register_qubits_ne_asymptotic")
+    skipped = list(ecdlp_evaluated_skipped_formula_keys())
 
     ecdlp_block: dict[str, Any] = {
         "active": True,

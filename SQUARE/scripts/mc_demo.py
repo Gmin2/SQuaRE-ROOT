@@ -26,7 +26,7 @@ from square.mc import load_monte_carlo_study_spec, run_monte_carlo_study
 
 def main() -> int:
     root = find_square_root(Path(__file__))
-    study_path = root / "Configs" / "monte_carlo_study_ecdlp_example.yaml"
+    study_path = root / "tests" / "fixtures" / "monte_carlo_study_ecdlp_example.yaml"
     spec = load_monte_carlo_study_spec(study_path, root=root)
     bundle = load_scenario_bundle(root / spec.base_scenario, root=root)
 

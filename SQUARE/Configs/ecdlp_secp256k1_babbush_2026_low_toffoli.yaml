@@ -5,6 +5,7 @@ description: >-
   Logical resources: ≤1450 logical qubits and ≤70M Toffoli gates (low_toffoli_variant). Physical baseline
   matches the paper’s superconducting ~10⁻³ gate error and planar connectivity narrative; cycle/reaction
   timings are documented placeholders in the modality file until extracted from the full paper.
+  Identity QCVV/QEM (σ=s=Γ=1) wires layers for VER / mitigated ceiling without changing multipliers.
 
 target:
   problem: ecdlp_secp256k1_256_bit
@@ -21,3 +22,5 @@ paths:
   magic: Assumptions/MagicStateProduction/ccz_factory_gidney_ekera_2021.yaml
   magic_aux: Assumptions/MagicStateProduction/t_factory_fallback_gidney_ekera_2021.yaml
   algorithm: Algorithms/ecdlp_secp256k1_babbush_et_al_2026.yaml
+  qcvv: Assumptions/QCVV/identity_no_overhead.yaml
+  qem: Assumptions/QEM/identity_no_overhead.yaml

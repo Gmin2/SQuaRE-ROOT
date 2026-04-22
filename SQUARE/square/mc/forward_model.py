@@ -9,6 +9,7 @@ from typing import Any
 from square.loader import ScenarioBundle
 from square.mc.overrides import apply_numeric_overrides
 from square.report import build_scenario_report
+from square.report_dashboard import DASHBOARD_LOGICAL_FAILURE_PROXY_KEY
 
 # Dashboard keys (metric_name, dashboard_field) extracted into MC metric dict keys.
 MC_DASHBOARD_METRIC_FIELDS: tuple[tuple[str, str], ...] = (
@@ -17,13 +18,24 @@ MC_DASHBOARD_METRIC_FIELDS: tuple[tuple[str, str], ...] = (
     ("approximate_data_plane_physical_qubits", "approximate_data_plane_physical_qubits"),
     ("logical_qubits_at_n", "logical_qubits_at_n"),
     (
-        "logical_failure_probability_union_depth_proxy",
-        "logical_failure_probability_union_depth_proxy",
+        "logical_failure_proxy_union_depth_phenomenological",
+        DASHBOARD_LOGICAL_FAILURE_PROXY_KEY,
     ),
     ("magic_limited_runtime_multiplier", "magic_limited_runtime_multiplier"),
 )
 
 MC_ECDLP_METRIC_KEY = "ecdlp_toffoli_gates_upper_bound"
+
+# When ``strict_metrics`` is on, draws must have finite floats for these keys (pipeline integrity).
+# This allowlist is intentionally smaller than :func:`extract_default_mc_metrics` output: optional
+# dashboard fields (e.g. logical_failure_proxy_union_depth_phenomenological, magic_limited_runtime_multiplier)
+# may be null when inputs or assumptions skip those checks; strict mode does not gate the run on them.
+MC_STRICT_REQUIRED_METRIC_KEYS: tuple[str, ...] = (
+    "naive_serial_time_days",
+    "code_distance_d",
+    "approximate_data_plane_physical_qubits",
+    "logical_qubits_at_n",
+)
 
 
 @dataclass(frozen=True)
@@ -58,6 +70,31 @@ def _as_float(x: Any) -> float | None:
         return None
 
 
+def assert_mc_strict_required_metrics(
+    metrics: Mapping[str, float | None],
+    *,
+    sample_index: int,
+) -> None:
+    """
+    Raise if any required MC metric is missing (``None`` or non-finite).
+
+    Used when study ``strict_metrics`` or CLI ``--strict-metrics`` is enabled.
+    """
+    missing: list[str] = []
+    for key in MC_STRICT_REQUIRED_METRIC_KEYS:
+        v = metrics.get(key)
+        if v is None or not isinstance(v, (int, float)):
+            missing.append(key)
+            continue
+        f = float(v)
+        if f != f or f in (float("inf"), float("-inf")):
+            missing.append(f"{key}(non-finite)")
+    if missing:
+        raise ValueError(
+            f"strict_metrics: sample {sample_index} missing or invalid required metrics: {missing!r}"
+        )
+
+
 def evaluate_forward_model(
     bundle: ScenarioBundle,
     *,
@@ -71,6 +108,10 @@ def evaluate_forward_model(
     When ``include_full_report`` is False, :func:`square.report.build_scenario_report` is called with
     ``outputs="mc_metrics"`` (dashboard + ``algorithm_metrics`` only). That path still evaluates formulas,
     distance, patch/rollup, timing, and dashboard fields each draw; the returned ``report`` is ``None``.
+
+    Callers that evaluate many draws in parallel must pass an independent bundle per task if the
+    report pipeline could mutate shared YAML dicts; :func:`square.mc.run_sampling.run_monte_carlo_study`
+    deep-copies the bundle for each draw when ``n_jobs > 1``.
     """
     ov = dict(numeric_overrides) if numeric_overrides else {}
     b = apply_numeric_overrides(bundle, ov) if ov else bundle

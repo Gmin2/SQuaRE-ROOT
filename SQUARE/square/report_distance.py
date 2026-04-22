@@ -15,6 +15,36 @@ from square.yaml_numeric import (
 )
 
 
+def read_heuristic_phenomenological_logical_error_model_applies(
+    scenario: Mapping[str, Any],
+    warnings: list[str],
+) -> bool:
+    """
+    When ``scenario.qec.heuristic_phenomenological_logical_error_model_applies`` is explicitly false,
+    the engine must not use the phenomenological union-bound / ``p_L`` stack (distance heuristic, fault model).
+
+    Omitted or unknown values default to ``True`` for backward compatibility.
+    """
+    raw = scenario.get("qec")
+    if not isinstance(raw, dict):
+        return True
+    key = raw.get("heuristic_phenomenological_logical_error_model_applies")
+    if key is None:
+        return True
+    if isinstance(key, bool):
+        return key
+    s = str(key).strip().lower()
+    if s in ("false", "0", "no", "off"):
+        return False
+    if s in ("true", "1", "yes", "on"):
+        return True
+    warnings.append(
+        "scenario.qec.heuristic_phenomenological_logical_error_model_applies is not a boolean; "
+        "treating as true."
+    )
+    return True
+
+
 def parse_code_distance_from_scenario(
     scenario: Mapping[str, Any],
     *,
@@ -90,6 +120,14 @@ def resolve_code_distance_full(
     heuristic_aliases = frozenset({"heuristic_union_bound", "optimize_heuristic", "heuristic"})
     if policy not in heuristic_aliases:
         meta["distance_d"] = None
+        return None, meta
+
+    if not read_heuristic_phenomenological_logical_error_model_applies(scenario, warnings):
+        warnings.append(
+            "qec.distance_policy requests a heuristic but scenario.qec.heuristic_phenomenological_logical_error_model_applies "
+            "is false; distance d not computed via phenomenological union bound."
+        )
+        meta.update({"mode": "heuristic_disabled_by_assumption", "distance_d": None})
         return None, meta
 
     p: float | None = physical_gate_error_rate_effective

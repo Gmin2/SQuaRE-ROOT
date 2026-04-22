@@ -62,8 +62,10 @@ def test_load_rsa2048_gidney_ekera_2021_parallel() -> None:
     assert bundle.magic_aux is not None
     assert bundle.magic_aux["document_id"] == "t_factory_fallback_gidney_ekera_2021"
 
-    assert bundle.qcvv is None
-    assert bundle.qem is None
+    assert bundle.qcvv is not None
+    assert bundle.qcvv["document_id"] == "qcvv_identity_no_overhead"
+    assert bundle.qem is not None
+    assert bundle.qem["document_id"] == "qem_identity_no_overhead"
 
     t1 = bundle.algorithm["paper_table1_pins_by_modulus_bit_length"]["value"]["2048"]
     assert t1["toffoli_plus_t_halves_billions"] == 2.7
@@ -92,28 +94,22 @@ def test_load_scenario_bundle_require_scenario_under_root_raises(tmp_path: Path)
         load_scenario_bundle(outside, root=root, require_scenario_under_root=True)
 
 
-def test_rsa_parallel_and_qcvv_qem_companion_paths_match_except_qcvv_qem() -> None:
-    """Companion scenario must stay aligned with baseline ``paths.*`` (step-2 wiring guard)."""
+def test_mvp_rsa_config_includes_identity_qcvv_qem_paths() -> None:
+    """MVP RSA flagship wires identity QCVV/QEM alongside magic_aux."""
     root = find_square_root()
-    base = yaml.safe_load((root / "Configs" / "rsa2048_gidney_ekera_2021_parallel.yaml").read_text(encoding="utf-8"))
-    wired = yaml.safe_load(
-        (root / "Configs" / "rsa2048_gidney_ekera_2021_parallel_qcvv_qem.yaml").read_text(encoding="utf-8")
-    )
-    pb = base["paths"]
-    pw = wired["paths"]
-    assert pw["qcvv"] == "Assumptions/QCVV/identity_no_overhead.yaml"
-    assert pw["qem"] == "Assumptions/QEM/identity_no_overhead.yaml"
-    for k in ("modality", "qec_code", "magic", "algorithm", "magic_aux"):
-        assert pb[k] == pw[k]
+    data = yaml.safe_load((root / "Configs" / "rsa2048_gidney_ekera_2021_parallel.yaml").read_text(encoding="utf-8"))
+    paths = data["paths"]
+    assert paths["qcvv"] == "Assumptions/QCVV/identity_no_overhead.yaml"
+    assert paths["qem"] == "Assumptions/QEM/identity_no_overhead.yaml"
 
 
-def test_load_repo_flagship_qcvv_qem_companion_scenarios() -> None:
-    """Step-2 wiring: RSA, ECDLP, and Oratomic companions load identity QCVV/QEM documents."""
+def test_load_repo_mvp_flagship_scenarios_wire_identity_qcvv_qem() -> None:
+    """MVP scenario YAMLs load identity QCVV/QEM documents."""
     root = find_square_root()
     for rel in (
-        "Configs/rsa2048_gidney_ekera_2021_parallel_qcvv_qem.yaml",
-        "Configs/ecdlp_secp256k1_babbush_2026_low_toffoli_qcvv_qem.yaml",
-        "Configs/oratomic_gold_path_qcvv_qem.yaml",
+        "Configs/rsa2048_gidney_ekera_2021_parallel.yaml",
+        "Configs/ecdlp_secp256k1_babbush_2026_low_toffoli.yaml",
+        "Configs/oratomic_gold_path.yaml",
     ):
         bundle = load_scenario_bundle(root / rel, root=root)
         assert bundle.qcvv is not None
@@ -164,14 +160,15 @@ def test_load_ecdlp_secp256k1_babbush_2026_low_toffoli() -> None:
     assert env["toffoli_gates_upper_bound"] == 70_000_000
 
 
-def test_load_ecdlp_secp256k1_cain_2026_neutral_atom_qldpc() -> None:
+def test_load_oratomic_gold_path_cain_stack() -> None:
+    """Oratomic MVP scenario: Cain modality + QLDPC + same ECDLP algorithm as Babbush envelope."""
     root = find_square_root()
-    scenario = root / "Configs" / "ecdlp_secp256k1_cain_2026_neutral_atom_qldpc.yaml"
+    scenario = root / "Configs" / "oratomic_gold_path.yaml"
     assert scenario.is_file(), f"Missing scenario file: {scenario}"
 
     bundle = load_scenario_bundle(scenario, root=root)
 
-    assert bundle.scenario.get("scenario") == "ecdlp_secp256k1_cain_2026_neutral_atom_qldpc"
+    assert bundle.scenario.get("scenario") == "oratomic_gold_path"
     assert bundle.modality["document_id"] == "neutral_atom_cain_et_al_2026"
     assert bundle.modality["coherence_time_t1_microseconds"]["unit"] == "microseconds"
     assert bundle.qec["document_id"] == "qldpc_cain_et_al_2026"

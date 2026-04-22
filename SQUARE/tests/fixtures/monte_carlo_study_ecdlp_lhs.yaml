@@ -1,4 +1,4 @@
-# Latin hypercube study: all parameters must be ``distribution: uniform`` (same ECDLP scenario).
+# Latin hypercube study: all parameters must be ``distribution: uniform`` (same ECDLP MVP scenario).
 schema_version: 1
 study_id: mc_ecdlp_lhs_uniform_only
 description: >-

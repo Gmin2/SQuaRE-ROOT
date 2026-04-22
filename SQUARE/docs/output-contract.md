@@ -26,7 +26,7 @@ Every report is a JSON-serializable object with at least:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `report_contract_version` | `number` | Contract version (currently `15`). |
+| `report_contract_version` | `number` | Contract version (currently `17`). |
 | `engine` | `object` | `{ "name": "square", "version": "<package version>" }`. |
 | `generated_at` | `string` | ISO-8601 UTC timestamp when the report was built. |
 | `warnings` | `array` | Human-readable strings for caveats (missing distance `d`, symbolic formulas, branch flags). |
@@ -60,6 +60,8 @@ Reports fill QEC patch metrics when **code distance** is resolved:
 | `qec.distance_policy` | If set to `heuristic_union_bound` (aliases: `optimize_heuristic`, `heuristic`) and explicit `d` is absent, use phenomenological heuristic (see `qec_distance_resolution`). |
 
 Optional scenario keys for the heuristic: `qec.logical_error_budget` (default `0.1`). Tunables live on the QEC profile (`heuristic_*` parameters in YAML).
+
+- `qec.heuristic_phenomenological_logical_error_model_applies` (optional `boolean`, default **true**): when **false**, the engine skips phenomenological ``p_L``, union-depth dashboard proxy, heuristic distance selection, ``layout_optimization`` scans, and related union-bound drivers; ``qec_distance_resolution.mode`` becomes ``heuristic_disabled_by_assumption`` when a heuristic policy was requested but the model is off. Use for non–surface-code stacks where the phenomenological proxy would be misleading.
 
 - `qec.distance_optimizer`: `discrete_scan` (default) runs a **discrete odd-`d` scan** for the smallest distance meeting the union bound; `closed_form` uses the legacy closed-form inversion + clamping.
 - `qec.emit_optimization_trace`: if true, `layout_optimization.candidates` lists every scanned `d` (union-bound mass, data-plane proxy, optional residual vs reported total).
@@ -104,8 +106,12 @@ Headline fields (all optional / nullable):
 | `minimum_spacetime_volume_megaqubitdays_at_n` | From the same Table 1 consolidated block when present. |
 | `logical_qubit_physical_qubits_if_distance_d` | Physical qubits per logical from the QEC profile patch formula evaluated at scenario/CLI `d`; `null` if `d` or formula missing. |
 | `approximate_data_plane_physical_qubits` | `abstract_logical_qubits × physical_qubits_per_logical` when both exist; `null` otherwise. Naive data-qubit proxy (see warnings). |
-| `t_factory_fallback_recommended` | From `magic_aux` when `n` exceeds the documented CCZ error-budget transition scale. |
-| `t_factory_transition_modulus_bits_order_of_magnitude` | From `magic_aux` when present (paper’s approximate transition scale). |
+| `t_factory_fallback_recommended` | `boolean`. When `paths.magic_aux` is absent, **`false`**. When a `magic_aux` document is loaded: **`true`** only if `target.problem` matches `magic_aux.applies_when_target_problem_in` (default `rsa_integer_factoring` when omitted), `t_factory_used_beyond_ccz_error_budget` is **true**, and `n` ≥ `modulus_bit_length_ccz_to_t_transition_order_of_magnitude` when that transition is set. |
+| `t_factory_transition_modulus_bits_order_of_magnitude` | Integer bits from `magic_aux` when applicable; **`null`** when `magic_aux` is absent, the transition entry is missing/invalid, or the scenario target is **not** in `applies_when_target_problem_in` (so RSA-only caption metadata is not surfaced for ECDLP, etc.). |
+| `t_factory_magic_aux_applicable_to_target` | `boolean` / **`null`**. **`null`** when no `magic_aux` document; otherwise whether `target.problem` is listed under `magic_aux.applies_when_target_problem_in` (default list `rsa_integer_factoring`). |
+| `t_factory_transition_scale_confidence` | `string` / **`null`**. Confidence field from the transition `parameter_entry` when applicable; **`null`** otherwise. Non-`proven` values trigger an approximate-threshold warning in `warnings`. |
+| `t_factory_fallback_non_clifford_mechanism` | `string` / **`null`**. From `magic_aux.fallback_non_clifford_mechanism` when applicable; included in the fallback warning when `t_factory_fallback_recommended` is **true**. |
+| `t_factory_branch_yaml_enabled` | `boolean` / **`null`**. Parsed from `magic_aux.t_factory_used_beyond_ccz_error_budget` (default **true** when entry missing); when **false** and `n` would otherwise trip the transition, a warning explains that fallback is not recommended. |
 | `ccz_factory_parameter_key` | Table 2 row `layout_descriptor` from the matched `paper_table2_rsa2048_reference_rows` entry (used for simple schedule inference), when present. |
 | `table2_pinned_source_parameter` | Name of the consolidated magic YAML parameter (`paper_table2_rsa2048_reference_rows`) when CCZ count is inferred; otherwise `null`. |
 | `table2_pinned_row_layout_descriptor` | Same as `ccz_factory_parameter_key` (explicit slot for UIs). |
@@ -115,7 +121,7 @@ Headline fields (all optional / nullable):
 | `rsa_2048_reported_wall_clock_days_key` | Same logical ref as physical qubits key when wall-clock days are present. |
 | `reported_rsa2048_wall_clock_days` | `wall_clock_days` field from the matched Table 2 row. |
 | `naive_serial_time_days_from_depth_times_cycle` | `abstract_measurement_depth_layers × surface_code_cycle_time` (µs) converted to days; `null` if inputs missing. **Not** the paper’s scheduled wall time. |
-| `logical_failure_probability_union_depth_proxy` | `min(1, D × p_L)` when ``D`` = evaluated ``abstract_measurement_depth_layers.value`` and ``p_L`` = ``logical_fault_model.logical_error_rate_per_cycle`` (phenomenological). Union-style **proxy** for cumulative logical failure risk; `null` if either input is missing or ``p_L`` is omitted (e.g. ``p_phys ≥ p_th``). Not a decoder-accurate fault simulation. |
+| `logical_failure_proxy_union_depth_phenomenological` | `min(1, D × p_L)` when ``D`` = evaluated ``abstract_measurement_depth_layers.value`` and ``p_L`` = ``logical_fault_model.logical_error_rate_per_cycle`` (phenomenological). Union-style **proxy mass** (not a calibrated logical failure probability); `null` if either input is missing, ``p_L`` is omitted (e.g. ``p_phys ≥ p_th``), or phenomenology is disabled via scenario ``qec.heuristic_phenomenological_logical_error_model_applies: false``. Not a decoder-accurate fault simulation. |
 | `code_distance_d` | Resolved distance used for patch evaluation (mirror of `qec_overhead...distance_d`). |
 | `qec_distance_resolution_mode` | Short string from `qec_distance_resolution.mode`. |
 | `derived_non_data_overhead_physical_qubits` | When Table 2 total qubits and data-plane proxy exist: `reported_total − approximate_data_plane` (remainder lumped: factories, routing, etc.). |
@@ -133,7 +139,7 @@ Headline fields (all optional / nullable):
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `mode` | `string` | `cli_override` \| `explicit_scenario` \| `heuristic_union_bound` \| `unset` \| failure modes (`heuristic_failed_*`). |
+| `mode` | `string` | `cli_override` \| `explicit_scenario` \| `heuristic_union_bound` \| `unset` \| `heuristic_disabled_by_assumption` \| failure modes (`heuristic_failed_*`). |
 | `distance_d` | `number \| null` | Resolved `d` when available. |
 | `heuristic` | `object` | Present for `heuristic_union_bound`; includes `scan_rows` when using discrete scan, plus `closed_form_distance_d` for comparison. |
 | `logical_error_budget` | `number` | Budget passed into the heuristic when applicable. |
@@ -199,11 +205,11 @@ Phenomenological **logical error rate per QEC cycle** and a **logical cycle time
 | Key | Type | Description |
 |-----|------|-------------|
 | `schema` | `string` | `logical_fault_model_v1`. |
-| `status` | `string` | `computed` when both per-cycle logical error and cycle time are available; `partial` if only one; `insufficient_inputs` if neither. |
+| `status` | `string` | `computed` when both per-cycle logical error and cycle time are available; `partial` if only one; `insufficient_inputs` if neither; `model_disabled_by_assumption` when ``scenario.qec.heuristic_phenomenological_logical_error_model_applies`` is **false** (``p_L`` omitted by policy while cycle-time pieces may still appear). |
 | `logical_error_rate_per_cycle` | `number \| null` | `A·(p_phys/p_th)^ceil((d+1)/2)` via ``square.qec_distance_heuristic.phenomenological_logical_error_per_cycle`` when `d` and effective physical gate error exist and `p_phys < p_th`. **`p_phys`** is **`p_effective`** = **``p_nominal`` × QCVV σ × scaling penalty** when those factors are configured (see `inputs`); **`null`** if `p_phys ≥ p_th` or inputs missing. |
 | `logical_error_model` | `string` | Model id (`phenomenological_prefactor_times_p_over_pth_to_half_distance`). |
 | `exponent_half_distance` | `number \| null` | Integer `(d+1)//2` used in the exponent when `logical_error_rate_per_cycle` is computed. |
-| `inputs` | `object` | Includes `code_distance_d`, `physical_gate_error_rate` (same as **`p_effective`**, the rate passed into the phenomenological model), **`physical_gate_error_rate_nominal`** (always the modality headline **`characteristic_physical_gate_error_rate`** for Table-2-style traceability, even when the heuristic uses a different base), optional stack keys **`p_nominal`** (base rate before σ and penalty: ``max(1Q,2Q)`` when both extended gate rates are usable, else one extended rate, else characteristic), **`p_nominal_gate_proxy_method`** (`max_1q_2q` \| `single_1q_only` \| `two_2q_only` \| `characteristic_fallback`), **`characteristic_physical_gate_error_rate`** (headline characteristic value for comparison), **`ver_grounded_on_characteristic_only`** (`true` when **VER** uses headline characteristic × σ regardless of heuristic ``p_nominal``), plus **VER/scaling** keys (`qcvv_multiplier_sigma`, `scaling_penalty_*`, `scaling_reference_physical_qubits`, `p_effective`), and heuristic QEC parameters. |
+| `inputs` | `object` | Includes **`phenomenological_model_applies`** (`boolean`), `code_distance_d`, `physical_gate_error_rate` (same as **`p_effective`**, the rate passed into the phenomenological model), **`physical_gate_error_rate_nominal`** (always the modality headline **`characteristic_physical_gate_error_rate`** for Table-2-style traceability, even when the heuristic uses a different base), optional stack keys **`p_nominal`** (base rate before σ and penalty: ``max(1Q,2Q)`` when both extended gate rates are usable, else one extended rate, else characteristic), **`p_nominal_gate_proxy_method`** (`max_1q_2q` \| `single_1q_only` \| `two_2q_only` \| `characteristic_fallback`), **`characteristic_physical_gate_error_rate`** (headline characteristic value for comparison), **`ver_grounded_on_characteristic_only`** (`true` when **VER** uses headline characteristic × σ regardless of heuristic ``p_nominal``), plus **VER/scaling** keys (`qcvv_multiplier_sigma`, `scaling_penalty_*`, `scaling_reference_physical_qubits`, `p_effective`), and heuristic QEC parameters. |
 
 **Nominal vs characteristic:** ``p_nominal`` drives heuristic distance and ``p_effective``. ``physical_gate_error_rate_nominal`` in this block remains the **headline** ``characteristic_physical_gate_error_rate`` from modality YAML. **``system_metrics.validated_error_rate_ver``** (VER) continues to use **characteristic × σ** when `paths.qcvv` is set, not ``p_nominal``.
 | `logical_cycle_time` | `object` | `logical_cycle_time_microseconds`: **`max`** of available components; `components_microseconds` lists each; `provenance` describes the aggregation rule. |
@@ -319,3 +325,5 @@ Evaluable formula strings follow **Python** syntax for powers (`**`, not `^`).
 | `13` | **Dashboard** adds ``logical_failure_probability_union_depth_proxy`` = ``min(1, D×p_L)`` (depth proxy × phenomenological ``p_L``). **Monte Carlo** default metric slice includes this key when present. |
 | `14` | **``physical_layer``** adds fixed ``notes`` and passthrough of optional OSRE richness keys (``fabrication_variability_proxy``, ``thermal_load_index_proxy``, ``control_plane_saturation_proxy``) when present in modality YAML; they do **not** feed heuristic ``p_effective`` or distance in this version. |
 | `15` | **Dashboard** adds optional magic throughput proxies: ``magic_supply_adequate`` and ``magic_limited_runtime_multiplier`` when magic YAML includes ``ccz_factory_supply_abstract_measurement_depth_layers_per_second_per_factory`` and CCZ width + honest timing exist; otherwise ``null`` with explanatory ``warnings``. **Monte Carlo** default metric slice includes ``magic_limited_runtime_multiplier`` when present. |
+| `16` | **Dashboard** renames union-depth field to ``logical_failure_proxy_union_depth_phenomenological`` (explicitly **not** a calibrated failure probability). Optional scenario ``qec.heuristic_phenomenological_logical_error_model_applies: false`` disables phenomenological ``p_L``, heuristic ``d``, union proxy, and ``layout_optimization`` scans. ``logical_fault_model.inputs`` includes ``phenomenological_model_applies``. Scaling reference ``N=1`` fallback emits an explicit warning. **Monte Carlo** summary v2 adds ``strict_metrics``, ``column_numeric_present_counts``, ``summary_degraded_from_row_filtering``, and ``notes`` (correlation caveats). MC CSV column for the proxy uses the new name. |
+| `17` | **Dashboard** expands ``magic_aux`` / T-factory fields: ``t_factory_magic_aux_applicable_to_target``, ``t_factory_transition_scale_confidence``, ``t_factory_fallback_non_clifford_mechanism``, ``t_factory_branch_yaml_enabled``; transition scale and mechanism are omitted when ``target.problem`` is outside ``applies_when_target_problem_in`` (YAML on ``t_factory_fallback_gidney_ekera_2021``). Warnings cover applicability, approximate caption thresholds (confidence ≠ ``proven``), branch disabled vs scale, and recommended fallback (with mechanism). Evaluation is centralized in ``square.report_magic_aux.evaluate_magic_aux_t_factory_dashboard``. |

@@ -86,7 +86,8 @@ scenario_file:
     paths_qcvv: { description: "Optional under paths: QCVV profile under Assumptions/QCVV/." }
     paths_qem: { description: "Optional under paths: QEM profile under Assumptions/QEM/." }
     qec_code_distance: { description: Optional positive integer; surface-code distance d for evaluating logical_qubit_patch_physical_qubit_count_formula in reports. }
-    qec: { description: Optional nested map; may include code_distance, distance_policy (e.g. heuristic_union_bound), logical_error_budget, distance_optimizer (discrete_scan or closed_form), emit_optimization_trace, emit_layout_optimization (default on). }
+    qec: { description: Optional nested map; may include code_distance, distance_policy (e.g. heuristic_union_bound), logical_error_budget, heuristic_phenomenological_logical_error_model_applies (bool; default true — set false to disable phenomenological p_L / heuristic d / union proxy for non-applicable code families), distance_optimizer (discrete_scan or closed_form), emit_optimization_trace, emit_layout_optimization (default on). }
+    monte_carlo_study: { description: "Study YAML may set strict_metrics (bool) or mc.strict_metrics to require non-null core MC metrics per draw; CLI --strict-metrics forces the same." }
     schedule: { description: Optional nested map; e.g. reaction_limited bool to steer simple schedule heuristics in reports. }
 
 # Example entry shape (comment only — use in real files under Modalities/, QEC_Codes/, etc.):

@@ -102,7 +102,7 @@ def test_square_cli_mc_module_invokes_main() -> None:
                 sys.executable,
                 "-m",
                 "square.cli_mc",
-                "Configs/monte_carlo_study_ecdlp_example.yaml",
+                "tests/fixtures/monte_carlo_study_ecdlp_example.yaml",
                 "--samples",
                 "2",
                 "--seed",

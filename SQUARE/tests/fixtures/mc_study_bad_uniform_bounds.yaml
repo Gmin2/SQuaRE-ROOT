@@ -1,0 +1,11 @@
+# Invalid: low >= high (must fail validate_distribution_spec at load).
+schema_version: 1
+study_id: mc_bad_bounds
+description: test fixture
+scope: prior_predictive_only
+base_scenario: Configs/ecdlp_secp256k1_babbush_2026_low_toffoli.yaml
+parameters:
+  - parameter_key: characteristic_physical_gate_error_rate
+    distribution: uniform
+    low: 0.002
+    high: 0.0005

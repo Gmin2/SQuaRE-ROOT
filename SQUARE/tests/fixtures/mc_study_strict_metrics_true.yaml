@@ -1,0 +1,12 @@
+# Minimal MC study for tests: ``strict_metrics`` must parse from YAML.
+schema_version: 1
+study_id: mc_strict_yaml
+description: test
+scope: prior_predictive_only
+base_scenario: Configs/ecdlp_secp256k1_babbush_2026_low_toffoli.yaml
+strict_metrics: true
+parameters:
+  - parameter_key: characteristic_physical_gate_error_rate
+    distribution: uniform
+    low: 0.0005
+    high: 0.002

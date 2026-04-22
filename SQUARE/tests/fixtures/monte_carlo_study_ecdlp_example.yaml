@@ -1,8 +1,10 @@
 # Monte Carlo study: prior predictive over modality + QEC numeric parameters (ECDLP scenario).
+# Lives under tests/fixtures/ (MVP keeps only scenario YAML in Configs/). Run:
+#   square-mc tests/fixtures/monte_carlo_study_ecdlp_example.yaml --samples 100 --root <SQUARE>
 schema_version: 1
 study_id: mc_ecdlp_gate_and_cycle_priors
 description: >-
-  Example priors for the ECDLP low-Toffoli scenario; run with: square-mc Configs/monte_carlo_study_ecdlp_example.yaml --samples 100
+  Example priors for the ECDLP low-Toffoli MVP scenario.
 
 scope: prior_predictive_only
 

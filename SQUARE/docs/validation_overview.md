@@ -82,7 +82,7 @@ Replace **placeholder modality timings** from the full paper, refine the **Toffo
 
 **Index:** `entries[].id == ecdlp_secp256k1_cain_et_al_2026_neutral_atom_qldpc` in [`validation_index.yaml`](validation_index.yaml).
 
-Scenario [`Configs/ecdlp_secp256k1_cain_2026_neutral_atom_qldpc.yaml`](../Configs/ecdlp_secp256k1_cain_2026_neutral_atom_qldpc.yaml) keeps the **same algorithm document** as the Babbush ECDLP example (`ecdlp_secp256k1_babbush_et_al_2026`) but points `paths.modality` at [`neutral_atom_cain_et_al_2026.yaml`](../Assumptions/Modalities/neutral_atom_cain_et_al_2026.yaml) and `paths.qec_code` at [`qldpc_cain_et_al_2026.yaml`](../Assumptions/QEC_Codes/qldpc_cain_et_al_2026.yaml), per *Shor's algorithm is possible with as few as 10,000 reconfigurable atomic qubits* (arXiv:2603.28627). The **Oratomic gold path** [`Configs/oratomic_gold_path.yaml`](../Configs/oratomic_gold_path.yaml) (`scenario: oratomic_gold_path`) is the same composition for stable demos and CI.
+The **Oratomic gold path** [`Configs/oratomic_gold_path.yaml`](../Configs/oratomic_gold_path.yaml) (`scenario: oratomic_gold_path`) keeps the **same algorithm document** as the Babbush ECDLP example (`ecdlp_secp256k1_babbush_et_al_2026`) but points `paths.modality` at [`neutral_atom_cain_et_al_2026.yaml`](../Assumptions/Modalities/neutral_atom_cain_et_al_2026.yaml) and `paths.qec_code` at [`qldpc_cain_et_al_2026.yaml`](../Assumptions/QEC_Codes/qldpc_cain_et_al_2026.yaml), per *Shor's algorithm is possible with as few as 10,000 reconfigurable atomic qubits* (arXiv:2603.28627). That file is the MVP canonical scenario for this stack (demos and CI).
 
 ### What the paper states (abstract)
 

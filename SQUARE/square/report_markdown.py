@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from square.report_dashboard import DASHBOARD_LOGICAL_FAILURE_PROXY_KEY
+
 
 def report_to_markdown(report: Mapping[str, Any]) -> str:
     """
@@ -51,8 +53,8 @@ def report_to_markdown(report: Mapping[str, Any]) -> str:
         f"{dash.get('naive_serial_time_days_from_depth_times_cycle')} days\n"
     )
     lines.append(
-        f"- **Logical failure proxy (min(1, D×p_L), union-style):** "
-        f"{dash.get('logical_failure_probability_union_depth_proxy')}\n"
+        f"- **Logical failure proxy (min(1, D×p_L), phenomenological; not P_fail):** "
+        f"{dash.get(DASHBOARD_LOGICAL_FAILURE_PROXY_KEY)}\n"
     )
     lines.append(f"- **Code distance d (resolved):** {dash.get('code_distance_d')} (`{dash.get('qec_distance_resolution_mode')}`)\n")
     lines.append(f"- **Physical qubits / logical (at d):** {dash.get('logical_qubit_physical_qubits_if_distance_d')}\n")
@@ -71,7 +73,14 @@ def report_to_markdown(report: Mapping[str, Any]) -> str:
         f"- **Magic supply adequate (proxy):** {dash.get('magic_supply_adequate')} · "
         f"**magic-limited runtime multiplier:** {dash.get('magic_limited_runtime_multiplier')}\n"
     )
-    lines.append(f"- **T-factory fallback flagged:** {dash.get('t_factory_fallback_recommended')}\n")
+    lines.append(
+        f"- **T-factory (magic_aux):** fallback_recommended={dash.get('t_factory_fallback_recommended')} · "
+        f"applicable_to_target={dash.get('t_factory_magic_aux_applicable_to_target')} · "
+        f"transition_bits={dash.get('t_factory_transition_modulus_bits_order_of_magnitude')} · "
+        f"transition_confidence={dash.get('t_factory_transition_scale_confidence')} · "
+        f"branch_yaml_enabled={dash.get('t_factory_branch_yaml_enabled')} · "
+        f"mechanism={dash.get('t_factory_fallback_non_clifford_mechanism')}\n"
+    )
 
     phys_layer = report.get("physical_layer") or {}
     lines.append("\n## Physical layer (OSRE snapshot)\n")

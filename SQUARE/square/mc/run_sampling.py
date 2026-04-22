@@ -7,6 +7,7 @@ parallel evaluation via :class:`concurrent.futures.ThreadPoolExecutor` (shared i
 
 from __future__ import annotations
 
+import copy
 import csv
 import json
 import random
@@ -17,13 +18,27 @@ from pathlib import Path
 from typing import Any
 
 from square.loader import ScenarioBundle
-from square.mc.forward_model import evaluate_forward_model
+from square.mc.forward_model import (
+    MC_STRICT_REQUIRED_METRIC_KEYS,
+    assert_mc_strict_required_metrics,
+    evaluate_forward_model,
+)
 from square.mc.lhs import all_blocks_uniform_for_lhs, generate_lhs_uniform_thetas
 from square.mc.parameters import sample_parameter_value
 from square.mc.study_spec import MonteCarloStudySpec
 
 # Bump when summary JSON shape or semantics change (quantiles/moments/correlations blocks).
-MC_SUMMARY_CONTRACT_VERSION = 1
+MC_SUMMARY_CONTRACT_VERSION = 3
+
+# Machine-readable caveat: study ``scope`` is not enforced as a statistical contract.
+MC_JOINT_SAMPLING_DISCLAIMER = (
+    "Monte Carlo draws apply independent numeric overrides to modality/QEC parameter_entry values "
+    "listed in the study; the YAML ``scope`` field is descriptive only and does not imply a calibrated "
+    "Bayesian joint prior, likelihood, or posterior. Latin hypercube only stratifies uniform marginals "
+    "and does not encode physical coupling across parameters. Summary quantiles, moments, and "
+    "correlations are descriptive aggregates over the forward model f(theta, scenario); do not treat "
+    "them as inferential objects without an explicit generative model."
+)
 
 
 @dataclass(frozen=True)
@@ -63,6 +78,22 @@ def _float_column_strict_all_rows(rows: Sequence[Mapping[str, Any]], col: str) -
         except (TypeError, ValueError):
             return None
     return vals
+
+
+def _count_rows_with_numeric(rows: Sequence[Mapping[str, Any]], col: str) -> int:
+    """How many rows have a parseable finite float in ``col``."""
+    n = 0
+    for r in rows:
+        v = r.get(col)
+        if v is None:
+            continue
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            continue
+        if f == f and f not in (float("inf"), float("-inf")):
+            n += 1
+    return n
 
 
 def _linear_quantile(sorted_vals: list[float], q: float) -> float:
@@ -184,6 +215,7 @@ def run_monte_carlo_study(
     include_full_report: bool = False,
     n_jobs: int = 1,
     sampling_strategy: str | None = None,
+    strict_metrics: bool | None = None,
 ) -> MonteCarloRunResult:
     """
     Draw ``n_samples`` θ vectors and evaluate the forward model per draw.
@@ -193,6 +225,9 @@ def run_monte_carlo_study(
         ``distribution: uniform``.
     :param n_jobs: If > 1, evaluate forward model with a thread pool (GIL-limited but avoids
         reloading YAML per thread). Use ~CPU count for large ``n_samples``.
+    :param strict_metrics: If true, abort when any draw omits a required MC metric (see
+        :func:`square.mc.forward_model.assert_mc_strict_required_metrics`). If ``None``, use
+        ``spec.strict_metrics``.
     """
     if n_samples < 1:
         raise ValueError("n_samples must be >= 1.")
@@ -216,9 +251,14 @@ def run_monte_carlo_study(
     else:
         theta_list = _build_theta_list_independent(param_blocks, n_samples, rng)
 
+    use_strict = spec.strict_metrics if strict_metrics is None else strict_metrics
+
     def _eval_one(theta: dict[str, float]) -> dict[str, float | None]:
+        # Under threaded evaluation, each draw gets a deep copy of the bundle so the report pipeline
+        # cannot race on shared nested dicts if a future refactor mutates YAML mappings in place.
+        work_bundle = copy.deepcopy(bundle) if n_jobs > 1 else bundle
         return evaluate_forward_model(
-            bundle,
+            work_bundle,
             numeric_overrides=theta,
             include_full_report=include_full_report,
         ).metrics
@@ -228,6 +268,10 @@ def run_monte_carlo_study(
     else:
         with ThreadPoolExecutor(max_workers=n_jobs) as ex:
             metrics_list = list(ex.map(_eval_one, theta_list))
+
+    if use_strict:
+        for i, m in enumerate(metrics_list):
+            assert_mc_strict_required_metrics(m, sample_index=i)
 
     rows: list[dict[str, Any]] = []
     for i, (theta, metrics) in enumerate(zip(theta_list, metrics_list, strict=True)):
@@ -243,20 +287,44 @@ def run_monte_carlo_study(
     moments = _moment_summary_for_columns(rows, summary_columns)
     correlations = _pairwise_correlations(rows, metric_keys)
 
+    column_numeric_present_counts: dict[str, dict[str, int]] = {}
+    if rows and summary_columns:
+        for col in summary_columns:
+            column_numeric_present_counts[col] = {
+                "present": _count_rows_with_numeric(rows, col),
+                "n_samples": n_samples,
+            }
+
+    summary_degraded = False
+    if column_numeric_present_counts:
+        summary_degraded = any(
+            column_numeric_present_counts[c]["present"] < n_samples for c in summary_columns
+        )
+
     summary: dict[str, Any] = {
         "mc_summary_contract_version": MC_SUMMARY_CONTRACT_VERSION,
         "study_id": spec.study_id,
         "schema_version": spec.schema_version,
         "scope": spec.scope,
+        "mc_joint_sampling_disclaimer": MC_JOINT_SAMPLING_DISCLAIMER,
+        "strict_metrics_required_keys": list(MC_STRICT_REQUIRED_METRIC_KEYS),
         "n_samples": n_samples,
         "seed": seed,
         "sampling_strategy": strategy,
         "n_jobs": n_jobs,
+        "strict_metrics": use_strict,
         "parameter_keys": param_keys,
         "metric_keys": metric_keys,
         "quantiles": quantiles,
         "moments": moments,
         "correlations": correlations,
+        "column_numeric_present_counts": column_numeric_present_counts,
+        "summary_degraded_from_row_filtering": summary_degraded,
+        "notes": [
+            "Joint sampling / non-Bayesian semantics: see summary.mc_joint_sampling_disclaimer.",
+            "Pearson correlations use only columns where every row in that column parses as a finite float; "
+            "pairwise series are aligned by row index (complete-case only). Not a principled estimator under MCAR missingness.",
+        ],
     }
 
     return MonteCarloRunResult(

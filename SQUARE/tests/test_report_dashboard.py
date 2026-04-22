@@ -5,8 +5,9 @@ from __future__ import annotations
 import pytest
 from square.report_dashboard import (
     build_dashboard_fields,
-    compute_logical_failure_probability_union_depth_proxy,
+    compute_logical_failure_proxy_union_depth_phenomenological,
 )
+from square.report_magic_aux import DEFAULT_MAGIC_AUX_T_FACTORY_DASHBOARD
 
 
 def test_build_dashboard_fields_includes_ecdlp_keys_when_block_present() -> None:
@@ -27,8 +28,7 @@ def test_build_dashboard_fields_includes_ecdlp_keys_when_block_present() -> None
         megaqd=None,
         patch_physical_per_logical=None,
         approx_data_physical=None,
-        t_fallback_recommended=False,
-        t_transition=None,
+        magic_aux_t_factory_dashboard=dict(DEFAULT_MAGIC_AUX_T_FACTORY_DASHBOARD),
         d_resolved=None,
         qec_distance_resolution_mode="heuristic_union_bound",
         derived_non_data_overhead_physical_qubits=None,
@@ -50,9 +50,9 @@ def test_build_dashboard_fields_includes_ecdlp_keys_when_block_present() -> None
     assert dash.get("magic_limited_runtime_multiplier") is None
 
 
-def test_compute_logical_failure_probability_union_depth_proxy() -> None:
+def test_compute_logical_failure_proxy_union_depth_phenomenological() -> None:
     w: list[str] = []
-    v = compute_logical_failure_probability_union_depth_proxy(
+    v = compute_logical_failure_proxy_union_depth_phenomenological(
         logical_fault_model={"logical_error_rate_per_cycle": 1e-6},
         evaluated={"abstract_measurement_depth_layers": {"value": 2e6}},
         warnings=w,
@@ -61,7 +61,7 @@ def test_compute_logical_failure_probability_union_depth_proxy() -> None:
     assert not w
 
     w2: list[str] = []
-    v2 = compute_logical_failure_probability_union_depth_proxy(
+    v2 = compute_logical_failure_proxy_union_depth_phenomenological(
         logical_fault_model={"logical_error_rate_per_cycle": 1e-6},
         evaluated={"abstract_measurement_depth_layers": {"value": 2e9}},
         warnings=w2,
@@ -69,10 +69,10 @@ def test_compute_logical_failure_probability_union_depth_proxy() -> None:
     assert v2 == 1.0
 
 
-def test_compute_logical_failure_probability_omitted_without_p_l() -> None:
+def test_compute_logical_failure_proxy_omitted_without_p_l() -> None:
     w: list[str] = []
     assert (
-        compute_logical_failure_probability_union_depth_proxy(
+        compute_logical_failure_proxy_union_depth_phenomenological(
             logical_fault_model={"logical_error_rate_per_cycle": None},
             evaluated={"abstract_measurement_depth_layers": {"value": 100.0}},
             warnings=w,

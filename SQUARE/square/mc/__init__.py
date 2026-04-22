@@ -2,6 +2,7 @@
 
 from square.mc.forward_model import (
     ForwardModelResult,
+    assert_mc_strict_required_metrics,
     evaluate_forward_model,
     extract_default_mc_metrics,
 )
@@ -19,6 +20,7 @@ from square.mc.study_spec import MonteCarloStudySpec, load_monte_carlo_study_spe
 __all__ = [
     "MC_SUMMARY_CONTRACT_VERSION",
     "PARAMETER_LAYERS",
+    "assert_mc_strict_required_metrics",
     "ForwardModelResult",
     "MonteCarloRunResult",
     "MonteCarloStudySpec",

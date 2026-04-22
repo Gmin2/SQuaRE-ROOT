@@ -11,9 +11,14 @@ from typing import Any
 def sample_parameter_value(spec: Mapping[str, Any], rng: random.Random) -> float:
     dist = str(spec.get("distribution", "")).strip().lower()
     if dist == "uniform":
-        return rng.uniform(float(spec["low"]), float(spec["high"]))
+        lo, hi = float(spec["low"]), float(spec["high"])
+        if lo >= hi:
+            raise ValueError(f"uniform requires low < high (got low={lo!r}, high={hi!r}).")
+        return rng.uniform(lo, hi)
     if dist == "log_uniform":
         lo, hi = float(spec["low"]), float(spec["high"])
+        if lo >= hi:
+            raise ValueError(f"log_uniform requires low < high (got low={lo!r}, high={hi!r}).")
         if lo <= 0 or hi <= 0:
             raise ValueError("log_uniform requires strictly positive low and high.")
         return math.exp(rng.uniform(math.log(lo), math.log(hi)))
@@ -27,6 +32,11 @@ def validate_distribution_spec(spec: Mapping[str, Any]) -> None:
     if dist in ("uniform", "log_uniform"):
         if "low" not in spec or "high" not in spec:
             raise ValueError(f"{dist} requires low and high.")
+        lo, hi = float(spec["low"]), float(spec["high"])
+        if lo >= hi:
+            raise ValueError(f"{dist} requires low < high (got low={lo!r}, high={hi!r}).")
+        if dist == "log_uniform" and (lo <= 0 or hi <= 0):
+            raise ValueError("log_uniform requires strictly positive low and high.")
     elif dist == "fixed":
         if "value" not in spec:
             raise ValueError("fixed requires value.")

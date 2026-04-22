@@ -29,7 +29,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "study",
         type=Path,
-        help="Path to Monte Carlo study YAML (e.g. Configs/monte_carlo_study_ecdlp_example.yaml).",
+        help="Path to Monte Carlo study YAML (e.g. tests/fixtures/monte_carlo_study_ecdlp_example.yaml).",
     )
     parser.add_argument(
         "--samples",
@@ -68,6 +68,11 @@ def main(argv: list[str] | None = None) -> int:
         default=1,
         metavar="J",
         help="Thread-pool workers for forward evaluations (default: 1).",
+    )
+    parser.add_argument(
+        "--strict-metrics",
+        action="store_true",
+        help="Abort if any draw omits required MC metrics (overrides study YAML when set).",
     )
     parser.add_argument(
         "--sampling",
@@ -129,6 +134,7 @@ def main(argv: list[str] | None = None) -> int:
             include_full_report=False,
             n_jobs=args.jobs,
             sampling_strategy=args.sampling,
+            strict_metrics=True if args.strict_metrics else None,
         )
     except (FileNotFoundError, TypeError, ValueError) as exc:
         print(f"square-mc: {exc}", file=sys.stderr)

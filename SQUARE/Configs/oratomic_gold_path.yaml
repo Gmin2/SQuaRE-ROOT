@@ -1,6 +1,6 @@
 # Gold path — **Oratomic**: reconfigurable neutral-atom stack + QLDPC + ECDLP secp256k1 (Babbush envelope).
-# Same assumption composition as `ecdlp_secp256k1_cain_2026_neutral_atom_qldpc.yaml`; this file is the
-# stable slug for demos, docs, and automation (`scenario: oratomic_gold_path`).
+# MVP flagship: Cain et al. (2026) modality + QLDPC + G&E magic (+ T-factory aux) + identity QCVV/QEM
+# (σ=s=Γ=1). Stable slug for demos, docs, and automation (`scenario: oratomic_gold_path`).
 schema_version: 1
 scenario: oratomic_gold_path
 description: >-
@@ -24,3 +24,5 @@ paths:
   magic: Assumptions/MagicStateProduction/ccz_factory_gidney_ekera_2021.yaml
   magic_aux: Assumptions/MagicStateProduction/t_factory_fallback_gidney_ekera_2021.yaml
   algorithm: Algorithms/ecdlp_secp256k1_babbush_et_al_2026.yaml
+  qcvv: Assumptions/QCVV/identity_no_overhead.yaml
+  qem: Assumptions/QEM/identity_no_overhead.yaml

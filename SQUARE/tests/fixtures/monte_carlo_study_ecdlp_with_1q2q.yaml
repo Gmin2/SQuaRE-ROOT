@@ -1,4 +1,4 @@
-# Monte Carlo: ECDLP scenario with priors over 1Q/2Q gate rates (aligns heuristic p_nominal with MC).
+# Monte Carlo: ECDLP MVP scenario with priors over 1Q/2Q gate rates (aligns heuristic p_nominal with MC).
 schema_version: 1
 study_id: mc_ecdlp_gate_rates_and_cycle_priors
 description: >-

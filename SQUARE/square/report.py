@@ -22,7 +22,10 @@ from square.qec_distance_heuristic import (
 )
 from square.report_assembly import assemble_report_shell
 from square.report_dashboard import build_dashboard_fields
-from square.report_distance import resolve_code_distance_full
+from square.report_distance import (
+    read_heuristic_phenomenological_logical_error_model_applies,
+    resolve_code_distance_full,
+)
 from square.report_formula_pins import (
     TABLE2_RSA2048_ROWS_KEY,
     build_formula_evaluation_and_pins,
@@ -30,6 +33,7 @@ from square.report_formula_pins import (
     table1_pin_row,
 )
 from square.report_layers import build_report_sources_and_layers
+from square.report_magic_aux import evaluate_magic_aux_t_factory_dashboard
 from square.report_markdown import report_to_markdown
 from square.report_physical_layout import build_physical_rollup_and_layout_estimate
 from square.report_qec_patch import evaluate_patch_physical_per_logical
@@ -47,7 +51,7 @@ from square.yaml_numeric import (
     read_qcvv_characterization_error_multiplier,
 )
 
-_REPORT_CONTRACT_VERSION = 15
+_REPORT_CONTRACT_VERSION = 17
 REPORT_CONTRACT_VERSION = _REPORT_CONTRACT_VERSION
 
 # Curated modality keys surfaced under top-level ``physical_layer`` (OSRE native physical layer).
@@ -140,6 +144,11 @@ def _scaling_reference_physical_qubits(
     )
     if v is not None:
         return max(1.0, v)
+    warnings.append(
+        "[scaling_reference_physical_qubits] Using N=1.0 fallback: no RSA Table-2 physical-qubit pin "
+        "and abstract_logical_qubits missing or non-finite. Heuristic scaling penalty "
+        "(1 + α log N + β N) may be understated vs a real device-size proxy."
+    )
     return 1.0
 
 
@@ -255,6 +264,9 @@ def _build_layout_optimization_block(
     if qec_block.get("emit_layout_optimization") is False:
         return None
 
+    if not read_heuristic_phenomenological_logical_error_model_applies(scenario, warnings):
+        return None
+
     if patch_formula is None or logical_qubits is None or selected_d is None:
         return None
 
@@ -307,6 +319,7 @@ def _build_layout_optimization_block(
 
 def _build_logical_fault_model_block(
     *,
+    scenario: Mapping[str, Any],
     distance_d: int | None,
     modality: Mapping[str, Any],
     qec: Mapping[str, Any],
@@ -322,6 +335,9 @@ def _build_logical_fault_model_block(
     ``surface_code_cycle_time`` and ``classical_control_reaction_time``, plus optional QEC
     ``qec_decode_latency_microseconds`` and ``qec_measurement_round_time_microseconds`` when present.
     """
+    phenomenological_model_applies = read_heuristic_phenomenological_logical_error_model_applies(
+        scenario, warnings
+    )
 
     p_phys: float | None = physical_gate_error_rate_effective
     if p_phys is None:
@@ -346,7 +362,12 @@ def _build_logical_fault_model_block(
 
     pl: float | None = None
     exponent_half_distance: int | None = None
-    if distance_d is not None and int(distance_d) > 0 and p_phys is not None:
+    if not phenomenological_model_applies:
+        warnings.append(
+            "logical_fault_model: scenario.qec.heuristic_phenomenological_logical_error_model_applies is false; "
+            "phenomenological logical_error_rate_per_cycle omitted by assumption."
+        )
+    elif distance_d is not None and int(distance_d) > 0 and p_phys is not None:
         d_int = int(distance_d)
         exponent_half_distance = (d_int + 1) // 2
         if p_phys >= p_th:
@@ -401,7 +422,9 @@ def _build_logical_fault_model_block(
             "A·(p/p_th)^ceil((d+1)/2), not a paper-calibrated logical channel."
         )
 
-    if pl is not None and tau_us is not None:
+    if not phenomenological_model_applies:
+        status = "model_disabled_by_assumption"
+    elif pl is not None and tau_us is not None:
         status = "computed"
     elif pl is not None or tau_us is not None:
         status = "partial"
@@ -421,6 +444,7 @@ def _build_logical_fault_model_block(
         "physical_gate_error_rate_nominal": p_nominal_for_inputs,
         "heuristic_threshold_p_th": p_th,
         "heuristic_prefactor_a": pref_a,
+        "phenomenological_model_applies": phenomenological_model_applies,
     }
     if physical_error_stack is not None:
         for key in (
@@ -733,21 +757,12 @@ def build_scenario_report(
                         "dashboard minimum_spacetime_volume_megaqubitdays_at_n omitted."
                     )
 
-    t_fallback_recommended = False
-    t_transition: int | None = None
-    if bundle.magic_aux:
-        trans = bundle.magic_aux.get("modulus_bit_length_ccz_to_t_transition_order_of_magnitude")
-        if isinstance(trans, dict) and trans.get("value") is not None:
-            try:
-                t_transition = int(trans["value"])
-            except (TypeError, ValueError):
-                t_transition = None
-        if n is not None and t_transition is not None and n >= t_transition:
-            t_fallback_recommended = True
-            warnings.append(
-                f"n={n} is at or above the documented CCZ→T factory transition scale (~{t_transition} bits); "
-                "magic_aux flags a different non-Clifford supply model."
-            )
+    magic_aux_t_factory_dashboard = evaluate_magic_aux_t_factory_dashboard(
+        bundle.magic_aux,
+        target=target,
+        n=n,
+        warnings=warnings,
+    )
 
     phys = build_physical_rollup_and_layout_estimate(
         magic=bundle.magic,
@@ -807,6 +822,7 @@ def build_scenario_report(
     )
 
     lfm = _build_logical_fault_model_block(
+        scenario=scenario,
         distance_d=d_resolved,
         modality=bundle.modality,
         qec=bundle.qec,
@@ -832,8 +848,7 @@ def build_scenario_report(
         megaqd=megaqd,
         patch_physical_per_logical=patch_physical_per_logical,
         approx_data_physical=approx_data_physical,
-        t_fallback_recommended=t_fallback_recommended,
-        t_transition=t_transition,
+        magic_aux_t_factory_dashboard=magic_aux_t_factory_dashboard,
         d_resolved=d_resolved,
         qec_distance_resolution_mode=qec_distance_resolution.get("mode"),
         derived_non_data_overhead_physical_qubits=derived_non_data_overhead_physical_qubits,

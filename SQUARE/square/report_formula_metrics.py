@@ -1,4 +1,20 @@
-"""Non-ECDLP algorithm formula evaluation for ``algorithm_metrics.evaluated``."""
+"""Non-ECDLP algorithm formula evaluation for ``algorithm_metrics.evaluated``.
+
+The tuple :data:`FORMULA_METRICS` lists algorithm YAML ``parameter_entry`` keys whose string
+``value`` is a closed-form expression in ``n`` (modulus bit length), evaluated by
+:func:`square.formula_eval.eval_numeric_formula`. Keys are:
+
+- ``abstract_logical_qubits_formula`` → ``abstract_logical_qubits``
+- ``abstract_measurement_depth_formula`` → ``abstract_measurement_depth_layers``
+- ``abstract_toffoli_plus_t_halves_count_formula`` → ``abstract_toffoli_plus_t_halves_count``
+
+``exponent_register_qubits_ne_asymptotic``: if ``value`` is a string containing ASCII ``O(``,
+it is treated as asymptotic documentation only (skipped). Otherwise it is evaluated like the
+other formulas and stored under ``exponent_register_qubits_ne`` in ``evaluated``.
+
+False-positive risk: any literal ``O(`` substring is treated as asymptotic; keep ``value``
+strings in paper-notation style (see algorithm YAML authoring).
+"""
 
 from __future__ import annotations
 
@@ -13,6 +29,26 @@ FORMULA_METRICS: tuple[tuple[str, str], ...] = (
     ("abstract_measurement_depth_formula", "abstract_measurement_depth_layers"),
     ("abstract_toffoli_plus_t_halves_count_formula", "abstract_toffoli_plus_t_halves_count"),
 )
+
+FORMULA_METRIC_SOURCE_KEYS: tuple[str, ...] = tuple(src for src, _ in FORMULA_METRICS)
+
+EXPONENT_REGISTER_SOURCE_KEY = "exponent_register_qubits_ne_asymptotic"
+EXPONENT_REGISTER_EVALUATED_KEY = "exponent_register_qubits_ne"
+
+
+def ecdlp_evaluated_skipped_formula_keys() -> tuple[str, ...]:
+    """Source keys listed under ``evaluated_skipped`` in ECDLP mode (not envelope-derived)."""
+    return FORMULA_METRIC_SOURCE_KEYS + (EXPONENT_REGISTER_SOURCE_KEY,)
+
+
+def is_asymptotic_formula_string(s: str) -> bool:
+    """
+    Return True if the algorithm YAML formula string should be skipped for numeric evaluation.
+
+    Contract: a literal ASCII substring ``O(`` (capital O + open parenthesis) denotes an
+    asymptotic expression from the literature, not a closed-form in ``n`` for this evaluator.
+    """
+    return "O(" in s
 
 
 @dataclass(frozen=True)
@@ -34,7 +70,9 @@ def evaluate_non_ecdlp_formula_metrics(
     """
     Resolve ``n`` from override or ``target``, evaluate YAML formulas into ``evaluated``.
 
-    Skips asymptotic ``O(...)`` entries and records ``exponent_register_qubits_ne_asymptotic`` when marked O(...).
+    ``modulus_bits_override`` wins when set. Booleans are rejected for ``n``. Skips asymptotic
+    entries (see :func:`is_asymptotic_formula_string`). Closed-form ``exponent_register_qubits_ne_asymptotic``
+    values are evaluated into ``exponent_register_qubits_ne`` when ``n`` is available.
     """
     evaluated: dict[str, Any] = {}
     evaluated_skipped: list[str] = []
@@ -42,6 +80,8 @@ def evaluate_non_ecdlp_formula_metrics(
     n: int | None = None
     if n_raw is None:
         warnings.append("No modulus_bit_length in scenario target (and no override); formula metrics skipped.")
+    elif isinstance(n_raw, bool):
+        warnings.append("modulus_bit_length must be an integer, not a boolean; formula metrics skipped.")
     else:
         try:
             n = int(n_raw)
@@ -57,13 +97,22 @@ def evaluate_non_ecdlp_formula_metrics(
             entry = algo.get(src_key)
             if not isinstance(entry, dict):
                 evaluated_skipped.append(src_key)
+                warnings.append(
+                    f"Algorithm YAML {src_key!r} is missing or not a parameter mapping; formula metric skipped."
+                )
                 continue
             raw = entry.get("value")
             if not isinstance(raw, str):
                 evaluated_skipped.append(src_key)
+                warnings.append(
+                    f"Algorithm YAML {src_key!r} value must be a string expression in n for numeric evaluation; skipped."
+                )
                 continue
-            if "O(" in raw or "O(1)" in raw:
+            if is_asymptotic_formula_string(raw):
                 evaluated_skipped.append(src_key)
+                warnings.append(
+                    f"{src_key!r}: formula string contains asymptotic marker 'O('; not evaluated numerically."
+                )
                 continue
             try:
                 value = eval_numeric_formula(raw, float(n))
@@ -77,9 +126,38 @@ def evaluate_non_ecdlp_formula_metrics(
                 "provenance": "computed_from_yaml_formula",
             }
 
-    exp = algo.get("exponent_register_qubits_ne_asymptotic")
-    if isinstance(exp, dict) and isinstance(exp.get("value"), str) and "O(" in str(exp["value"]):
-        evaluated_skipped.append("exponent_register_qubits_ne_asymptotic")
+        exp = algo.get(EXPONENT_REGISTER_SOURCE_KEY)
+        if exp is not None:
+            if not isinstance(exp, dict):
+                evaluated_skipped.append(EXPONENT_REGISTER_SOURCE_KEY)
+                warnings.append(
+                    f"Algorithm YAML {EXPONENT_REGISTER_SOURCE_KEY!r} is not a parameter mapping; skipped."
+                )
+            else:
+                raw = exp.get("value")
+                if not isinstance(raw, str):
+                    evaluated_skipped.append(EXPONENT_REGISTER_SOURCE_KEY)
+                    warnings.append(
+                        f"Algorithm YAML {EXPONENT_REGISTER_SOURCE_KEY!r} value must be a string for evaluation; skipped."
+                    )
+                elif is_asymptotic_formula_string(raw):
+                    evaluated_skipped.append(EXPONENT_REGISTER_SOURCE_KEY)
+                    warnings.append(
+                        f"{EXPONENT_REGISTER_SOURCE_KEY!r}: formula string contains asymptotic marker 'O('; "
+                        "not evaluated numerically."
+                    )
+                else:
+                    try:
+                        value = eval_numeric_formula(raw, float(n))
+                    except (FormulaEvalError, ZeroDivisionError, OverflowError) as exc:
+                        warnings.append(f"Could not evaluate {EXPONENT_REGISTER_SOURCE_KEY!r}: {exc}")
+                        evaluated_skipped.append(EXPONENT_REGISTER_SOURCE_KEY)
+                    else:
+                        evaluated[EXPONENT_REGISTER_EVALUATED_KEY] = {
+                            "value": value,
+                            "source_parameter": EXPONENT_REGISTER_SOURCE_KEY,
+                            "provenance": "computed_from_yaml_formula",
+                        }
 
     return NonEcdlpFormulaMetricsResult(
         evaluated=evaluated,

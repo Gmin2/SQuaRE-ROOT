@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from square.mc.forward_model import MC_DASHBOARD_METRIC_FIELDS
+from square.report_dashboard import DASHBOARD_LOGICAL_FAILURE_PROXY_KEY
 from square.mc.overrides import PARAMETER_LAYERS
 
 _extra_plot_dash_keys: tuple[str, ...] = (
@@ -112,7 +113,7 @@ def write_report_semantics_png(
     """
     plt = _require_pyplot()
     frame = extract_report_plot_frame(report)
-    p_fail = frame.get("logical_failure_probability_union_depth_proxy")
+    p_fail = frame.get(DASHBOARD_LOGICAL_FAILURE_PROXY_KEY)
     mult = frame.get("magic_limited_runtime_multiplier")
     adequate = frame.get("magic_supply_adequate")
     ratio = frame.get("schedule_calibration_ratio_table2_over_model_v1")
@@ -135,7 +136,7 @@ def write_report_semantics_png(
         ax.barh([0], [v], color="#2c5282", height=0.35)
         ax.set_xlim(0, 1.0)
         ax.set_yticks([])
-        ax.set_xlabel("probability mass (proxy)")
+        ax.set_xlabel("proxy value (not calibrated P_fail)")
         ax.text(v + 0.02, 0, f"{float(p_fail):.3g}", va="center", fontsize=9)
     else:
         ax.text(0.5, 0.5, "N/A", ha="center", va="center", transform=ax.transAxes)
@@ -217,7 +218,7 @@ def write_mc_semantics_png(
     ``PARAMETER_LAYERS``.
     """
     plt = _require_pyplot()
-    fail_key = "logical_failure_probability_union_depth_proxy"
+    fail_key = DASHBOARD_LOGICAL_FAILURE_PROXY_KEY
     mult_key = "magic_limited_runtime_multiplier"
     fails = [
         float(r[fail_key])
