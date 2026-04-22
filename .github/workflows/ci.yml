@@ -34,12 +34,19 @@ jobs:
       - name: Pytest
         run: python -m pytest -q
 
+      - name: MVP demo smoke (square-mvp-demo)
+        env:
+          MVP_JSON: ${{ runner.temp }}/mvp_demo.json
+        run: |
+          square-mvp-demo --json > "$MVP_JSON"
+          python -c "import json, os, pathlib; p=pathlib.Path(os.environ['MVP_JSON']); r=json.loads(p.read_text(encoding='utf-8')); assert r.get('scenario', {}).get('scenario') == 'oratomic_gold_path'"
+
       - name: Monte Carlo smoke (square-mc)
         env:
           MC_CSV: ${{ runner.temp }}/mc_smoke.csv
           MC_JSON: ${{ runner.temp }}/mc_smoke.json
         run: |
-          square-mc Configs/monte_carlo_study_ecdlp_example.yaml --samples 3 --seed 1 \
+          square-mc "${{ github.workspace }}/SQUARE/tests/fixtures/monte_carlo_study_ecdlp_example.yaml" --samples 3 --seed 1 \
             --output-csv "$MC_CSV" --summary-json "$MC_JSON" \
             --root "${{ github.workspace }}/SQUARE"
           python -c "import os, pathlib; p=pathlib.Path(os.environ['MC_CSV']); assert p.is_file() and p.stat().st_size>0; p2=pathlib.Path(os.environ['MC_JSON']); assert p2.is_file() and p2.stat().st_size>0"
