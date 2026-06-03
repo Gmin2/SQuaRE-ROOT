@@ -7,52 +7,98 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <h1>Q-Day Leaderboard</h1>
-    <p class="sub">
-      CRQC feasibility of every SQuaRE scenario, rebuilt on every push to <code>main</code> and nightly.
-      Higher score &rarr; fewer resources &rarr; nearer-term threat.
-    </p>
-    <p class="meta" id="meta">Loading&hellip;</p>
+  <header class="topbar">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+        <circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-dasharray="5 4" stroke-linecap="round"/>
+        <path d="M11 16.5l3 3.5 7-9" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="wordmark">SQuaRE</span>
+    </div>
+    <nav class="topnav">
+      <a href="https://github.com/Fitzoutofwater/SQuaRE-ROOT/blob/main/SQUARE/docs/leaderboard.md">Methodology</a>
+      <a href="https://github.com/Fitzoutofwater/SQuaRE-ROOT">GitHub</a>
+    </nav>
   </header>
 
   <main>
+    <section class="page-head">
+      <h1>Q-Day Leaderboard</h1>
+      <p class="sub">CRQC feasibility of every SQuaRE scenario &middot; higher score means fewer resources, nearer-term threat.</p>
+      <p class="meta" id="meta">Loading&hellip;</p>
+    </section>
+
     <div id="error" class="error" hidden></div>
 
-    <table id="board" hidden>
-      <thead>
-        <tr>
-          <th data-key="feasibility_score" class="num">Score</th>
-          <th data-key="scenario">Scenario</th>
-          <th data-key="problem">Problem</th>
-          <th data-key="modality">Modality</th>
-          <th data-key="code_distance_d" class="num">Code dist. d</th>
-          <th data-key="logical_qubits" class="num">Logical qubits</th>
-          <th data-key="physical_qubits" class="num">Physical qubits</th>
-          <th data-key="wall_clock_days" class="num">Wall-clock (days)</th>
-          <th class="num">Score trend</th>
-          <th data-key="warnings_count" class="num">Warnings</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+    <div class="frame" id="frame" hidden>
+      <!-- Hero stat cards -->
+      <section class="cards">
+        <article class="card">
+          <div class="card-label"><span class="tick"></span>MOST FEASIBLE <span id="trend" class="trend"></span></div>
+          <div class="card-value" id="lead-score">&mdash;</div>
+          <div class="card-sub" id="lead-name">&mdash;</div>
+        </article>
+        <article class="card">
+          <div class="card-label"><span class="tick"></span>SCENARIOS TRACKED</div>
+          <div class="card-value" id="count">&mdash;</div>
+          <div class="card-sub" id="count-sub">&mdash;</div>
+        </article>
+        <article class="card">
+          <div class="card-label"><span class="tick"></span>LAST UPDATED</div>
+          <div class="card-value sm" id="updated">&mdash;</div>
+          <div class="card-sub" id="commit">&mdash;</div>
+        </article>
+      </section>
 
-    <section class="notes">
-      <h2>How the score works</h2>
-      <p>
-        <strong>CRQC Feasibility Score</strong> = <code>clamp(20 &times; (1 &minus; log10(V)), 0, 100)</code>,
-        where <code>V</code> is the spacetime volume in megaqubit-days,
-        <code>V = (physical_qubits / 1e6) &times; wall_clock_days</code>.
-        It is a transparent proxy, not an endorsement of feasibility. Physical-qubit and
-        wall-clock values use a documented fallback chain across report fields
-        (hover a cell to see which source was used). Full definition and column provenance:
-        <a href="https://github.com/Fitzoutofwater/SQuaRE-ROOT/blob/main/SQUARE/docs/leaderboard.md">docs/leaderboard.md</a>.
+      <!-- Hero chart -->
+      <section class="chart-panel">
+        <div class="chart-toolbar">
+          <div class="chip-group" id="scenario-chips"></div>
+          <span class="chart-cap">Feasibility score over time</span>
+        </div>
+        <div class="chart-wrap">
+          <svg id="chart" class="chart" preserveAspectRatio="none" aria-label="Score over time"></svg>
+          <div id="tooltip" class="tooltip" hidden></div>
+          <div id="chart-empty" class="chart-empty" hidden>Trend appears after the next scheduled run.</div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Leaderboard table -->
+    <section class="board-panel" id="board-panel" hidden>
+      <h2>Ranking</h2>
+      <div class="table-scroll">
+        <table id="board">
+          <thead>
+            <tr>
+              <th class="num">#</th>
+              <th data-key="feasibility_score" class="num">Score</th>
+              <th data-key="scenario">Scenario</th>
+              <th data-key="problem">Problem</th>
+              <th data-key="modality">Modality</th>
+              <th data-key="code_distance_d" class="num">d</th>
+              <th data-key="logical_qubits" class="num">Logical qubits</th>
+              <th data-key="physical_qubits" class="num">Physical qubits</th>
+              <th data-key="wall_clock_days" class="num">Wall-clock (days)</th>
+              <th data-key="warnings_count" class="num">Warn</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="provenance">
+        Score = <code>clamp(20 &times; (1 &minus; log10(V)), 0, 100)</code>,
+        <code>V = (physical_qubits / 1e6) &times; wall_clock_days</code> megaqubit-days.
+        Hover a qubit or wall-clock cell to see which report field it came from.
+        Full method: <a href="https://github.com/Fitzoutofwater/SQuaRE-ROOT/blob/main/SQUARE/docs/leaderboard.md">docs/leaderboard.md</a>.
       </p>
     </section>
   </main>
 
   <footer>
-    <p>Generated by <code>square-report</code> &middot; SQuaRE engine. Click a column header to sort.</p>
+    <p>Generated by <code>square-report</code> &middot; rebuilt on every push to <code>main</code> and nightly.</p>
   </footer>
 
   <script src="app.js"></script>

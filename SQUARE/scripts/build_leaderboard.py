@@ -1,16 +1,9 @@
 #!/usr/bin/env python3
-"""Build the Q-Day Leaderboard data files by running ``square-report`` on every scenario.
+"""Build the Q-Day Leaderboard data files from ``square-report`` output.
 
-Shells out to ``square-report <config>`` for each YAML under ``Configs/``, extracts a
-small set of headline metrics (with documented fallback chains, because RSA and ECDLP
-scenarios populate different report fields), computes a CRQC feasibility score, and
-writes ``site/data/leaderboard.json``. Optionally merges a rolling history snapshot for
-the sparkline view.
-
-The script fails loudly: any scenario whose report exits non-zero or emits unparseable
-JSON aborts the whole build with a non-zero exit code, so a CI job goes red rather than
-silently publishing a partial board. See ``docs/leaderboard.md`` for the score formula
-and column provenance.
+Runs every scenario under ``Configs/``, scores it, and writes ``site/data``. Exits
+non-zero if any report fails so CI does not publish a half-built board. Score formula
+and column provenance live in ``docs/leaderboard.md``.
 """
 
 from __future__ import annotations
