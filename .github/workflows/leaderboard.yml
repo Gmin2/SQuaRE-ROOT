@@ -1,0 +1,75 @@
+name: Q-Day Leaderboard
+
+# Rebuilds the CRQC feasibility scoreboard from every scenario in SQUARE/Configs/
+# and publishes it to GitHub Pages. Runs on push to main, nightly, and on demand.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "SQUARE/Configs/**"
+      - "SQUARE/Assumptions/**"
+      - "SQUARE/Algorithms/**"
+      - "SQUARE/square/**"
+      - "SQUARE/site/**"
+      - "SQUARE/scripts/build_leaderboard.py"
+      - ".github/workflows/leaderboard.yml"
+  schedule:
+    # 03:17 UTC nightly (off the hour to avoid GitHub's scheduler congestion).
+    - cron: "17 3 * * *"
+  workflow_dispatch: {}
+
+# Required for actions/deploy-pages (OIDC token + Pages write).
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two deploys at once; let an in-progress run finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: SQUARE
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install SQuaRE
+        run: pip install -e .
+
+      - name: Build leaderboard data
+        # Fails loudly: build_leaderboard.py exits non-zero if any scenario report
+        # errors, which fails this step and the whole workflow.
+        run: |
+          python scripts/build_leaderboard.py \
+            --commit "$(git rev-parse --short HEAD)" \
+            --timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --history-url "${{ steps.pages.outputs.base_url }}/data/history.json"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: SQUARE/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

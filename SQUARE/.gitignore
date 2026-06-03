@@ -1,0 +1,6 @@
+# Generated leaderboard data (rebuilt by scripts/build_leaderboard.py / CI, deployed via Pages artifact)
+site/data/
+
+# Local uv interpreter + cache (set via UV_CACHE_DIR / UV_PYTHON_INSTALL_DIR during local dev)
+.uvcache/
+.uvpython/
